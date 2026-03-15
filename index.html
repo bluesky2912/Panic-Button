@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PANIC BUTTON</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #0f0f1a;
+    --border: #1a1a2e;
+    --neon-red: #ff2244;
+    --neon-yellow: #ffee00;
+    --neon-cyan: #00f5ff;
+    --neon-green: #39ff14;
+    --neon-purple: #bf00ff;
+    --neon-orange: #ff6600;
+    --text: #e8e8f0;
+    --dim: #555577;
+    --glow-red: 0 0 10px #ff2244, 0 0 30px #ff2244aa, 0 0 60px #ff224455;
+    --glow-yellow: 0 0 10px #ffee00, 0 0 30px #ffee00aa;
+    --glow-cyan: 0 0 10px #00f5ff, 0 0 30px #00f5ffaa;
+    --glow-green: 0 0 10px #39ff14, 0 0 30px #39ff14aa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* CRT scanlines overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.15) 3px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Vignette */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  #app {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cabinet {
+    width: min(480px, 98vw);
+    min-height: min(700px, 97vh);
+    background: var(--panel);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 0 0 24px 0;
+    box-shadow:
+      0 0 0 1px #ffffff08,
+      0 0 40px rgba(0,0,0,0.8),
+      inset 0 1px 0 #ffffff10;
+  }
+
+  /* Top header bar */
+  .header {
+    width: 100%;
+    background: #080810;
+    border-bottom: 2px solid var(--border);
+    padding: 14px 20px 12px;
+    text-align: center;
+    position: relative;
+  }
+
+  .game-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(28px, 8vw, 42px);
+    letter-spacing: 8px;
+    color: var(--neon-red);
+    text-shadow: var(--glow-red);
+    line-height: 1;
+  }
+
+  .tagline {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 3px;
+    margin-top: 4px;
+    text-transform: uppercase;
+  }
+
+  /* Score row */
+  .score-row {
+    display: flex;
+    gap: 24px;
+    padding: 14px 24px 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .score-box {
+    text-align: center;
+    flex: 1;
+    max-width: 140px;
+    background: #080810;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .score-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .score-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    line-height: 1;
+    color: var(--neon-yellow);
+    text-shadow: var(--glow-yellow);
+    transition: transform 0.1s, color 0.1s;
+  }
+
+  .score-value.pop {
+    transform: scale(1.3);
+    color: var(--neon-green);
+    text-shadow: var(--glow-green);
+  }
+
+  .rank-badge {
+    font-size: 9px;
+    letter-spacing: 2px;
+    margin-top: 4px;
+    color: var(--neon-cyan);
+    text-shadow: var(--glow-cyan);
+  }
+
+  /* Instruction area */
+  .instruction-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    width: 100%;
+    min-height: 200px;
+    position: relative;
+  }
+
+  .diff-label {
+    font-size: 9px;
+    letter-spacing: 4px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    transition: color 0.3s;
+  }
+
+  .instruction-text {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(32px, 10vw, 56px);
+    text-align: center;
+    line-height: 1.1;
+    transition: transform 0.15s;
+    letter-spacing: 2px;
+    padding: 0 10px;
+  }
+
+  .instruction-text.color-red    { color: var(--neon-red);    text-shadow: var(--glow-red);    }
+  .instruction-text.color-yellow { color: var(--neon-yellow); text-shadow: var(--glow-yellow); }
+  .instruction-text.color-cyan   { color: var(--neon-cyan);   text-shadow: var(--glow-cyan);   }
+  .instruction-text.color-green  { color: var(--neon-green);  text-shadow: var(--glow-green);  }
+  .instruction-text.color-purple { color: var(--neon-purple); text-shadow: 0 0 10px #bf00ff, 0 0 30px #bf00ffaa; }
+  .instruction-text.color-orange { color: var(--neon-orange); text-shadow: 0 0 10px #ff6600, 0 0 30px #ff660088; }
+
+  @keyframes flash-in {
+    0%   { transform: scale(0.7); opacity: 0; }
+    60%  { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+  .instruction-text.appear { animation: flash-in 0.2s ease-out forwards; }
+
+  /* Timer bar */
+  .timer-wrap {
+    width: calc(100% - 48px);
+    margin: 0 24px;
+  }
+
+  .timer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .timer-label { font-size: 9px; letter-spacing: 3px; color: var(--dim); text-transform: uppercase; }
+  .timer-value { font-size: 11px; letter-spacing: 1px; color: var(--neon-cyan); }
+
+  .timer-track {
+    width: 100%;
+    height: 8px;
+    background: #080810;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .timer-fill {
+    height: 100%;
+    background: var(--neon-green);
+    box-shadow: 0 0 8px var(--neon-green);
+    border-radius: 4px;
+    transition: width linear, background 0.2s;
+  }
+
+  .timer-fill.warn   { background: var(--neon-yellow); box-shadow: 0 0 8px var(--neon-yellow); }
+  .timer-fill.danger { background: var(--neon-red);    box-shadow: 0 0 8px var(--neon-red);    }
+
+  /* BIG BUTTON */
+  .button-area {
+    position: relative;
+    width: 100%;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 12px 0;
+  }
+
+  #panic-btn {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 3px;
+    transition: transform 0.08s, box-shadow 0.08s;
+    position: relative;
+    outline: none;
+    /* default red */
+    background: radial-gradient(circle at 35% 35%, #ff5566, #cc0022);
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    box-shadow:
+      0 8px 0 #880011,
+      0 10px 20px rgba(255,34,68,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+
+  #panic-btn:active, #panic-btn.pressed {
+    transform: translateY(6px);
+    box-shadow:
+      0 2px 0 #880011,
+      0 4px 10px rgba(255,34,68,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+
+  #panic-btn.blue {
+    background: radial-gradient(circle at 35% 35%, #44aaff, #0055cc);
+    box-shadow: 0 8px 0 #003388, 0 10px 20px rgba(0,100,255,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+
+  #panic-btn.green {
+    background: radial-gradient(circle at 35% 35%, #44ff88, #00aa44);
+    color: #000;
+    box-shadow: 0 8px 0 #006622, 0 10px 20px rgba(0,200,60,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+
+  #panic-btn.yellow {
+    background: radial-gradient(circle at 35% 35%, #ffee55, #ccaa00);
+    color: #000;
+    box-shadow: 0 8px 0 #886600, 0 10px 20px rgba(200,160,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+
+  #panic-btn.teleport { transition: left 0.1s, top 0.1s, transform 0.08s; position: absolute; }
+
+  /* Screen shake */
+  @keyframes shake {
+    0%,100% { transform: translate(0,0) rotate(0deg); }
+    15% { transform: translate(-6px, 3px) rotate(-1deg); }
+    30% { transform: translate(6px,-3px) rotate(1deg); }
+    45% { transform: translate(-4px, 4px) rotate(-0.5deg); }
+    60% { transform: translate(4px,-2px) rotate(0.5deg); }
+    75% { transform: translate(-2px, 1px) rotate(0deg); }
+  }
+  .cabinet.shake { animation: shake 0.4s ease-in-out; }
+
+  /* Flash overlay */
+  .flash-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 100;
+    border-radius: 16px;
+    transition: opacity 0.15s;
+  }
+  .flash-overlay.show-green  { background: rgba(57,255,20,0.15);  opacity: 1; }
+  .flash-overlay.show-red    { background: rgba(255,34,68,0.2);   opacity: 1; }
+
+  /* Feedback message */
+  .feedback {
+    height: 28px;
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-align: center;
+    text-transform: uppercase;
+    transition: opacity 0.3s;
+    opacity: 0;
+  }
+  .feedback.show { opacity: 1; }
+  .feedback.ok  { color: var(--neon-green); text-shadow: var(--glow-green); }
+  .feedback.bad { color: var(--neon-red);   text-shadow: var(--glow-red); }
+
+  /* ───── SCREENS ───── */
+  .screen {
+    position: absolute;
+    inset: 0;
+    background: var(--panel);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 32px;
+    text-align: center;
+    gap: 16px;
+  }
+  .screen.hidden { display: none; }
+
+  /* Start screen */
+  .screen-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(48px, 14vw, 72px);
+    letter-spacing: 8px;
+    color: var(--neon-red);
+    text-shadow: var(--glow-red);
+    line-height: 1;
+  }
+
+  .screen-sub {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    max-width: 300px;
+    line-height: 1.8;
+  }
+
+  .btn-start, .btn-retry {
+    margin-top: 8px;
+    background: none;
+    border: 2px solid var(--neon-cyan);
+    color: var(--neon-cyan);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 5px;
+    padding: 14px 36px;
+    cursor: pointer;
+    border-radius: 4px;
+    text-shadow: var(--glow-cyan);
+    box-shadow: 0 0 10px rgba(0,245,255,0.2);
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .btn-start:hover, .btn-retry:hover {
+    background: rgba(0,245,255,0.08);
+    box-shadow: 0 0 20px rgba(0,245,255,0.4);
+  }
+
+  /* Game over screen */
+  .go-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(44px, 12vw, 64px);
+    letter-spacing: 6px;
+    color: var(--neon-red);
+    text-shadow: var(--glow-red);
+  }
+
+  .go-message {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(18px, 5vw, 24px);
+    color: var(--neon-yellow);
+    text-shadow: var(--glow-yellow);
+    letter-spacing: 2px;
+  }
+
+  .go-scores {
+    display: flex;
+    gap: 24px;
+    margin: 8px 0;
+  }
+
+  .go-score-box {
+    background: #080810;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 20px;
+    min-width: 100px;
+  }
+
+  .go-score-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .go-score-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 42px;
+    line-height: 1;
+    color: var(--neon-cyan);
+    text-shadow: var(--glow-cyan);
+  }
+
+  .go-rank {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--neon-purple);
+    text-shadow: 0 0 10px #bf00ff;
+    text-transform: uppercase;
+  }
+
+  /* Pulse animation for header in game over */
+  @keyframes pulse-red {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+  .go-title.pulse { animation: pulse-red 0.8s ease-in-out infinite; }
+
+  /* Special round banner */
+  .special-banner {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--neon-yellow);
+    color: #000;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    padding: 4px 16px;
+    border-radius: 3px;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    white-space: nowrap;
+  }
+  .special-banner.show { opacity: 1; }
+
+  /* Multiplier popup */
+  .multiplier {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 80px;
+    color: var(--neon-yellow);
+    text-shadow: var(--glow-yellow);
+    pointer-events: none;
+    opacity: 0;
+    z-index: 300;
+    letter-spacing: 4px;
+  }
+  @keyframes pop-up {
+    0%  { opacity:0; transform: translate(-50%,-50%) scale(0.5); }
+    30% { opacity:1; transform: translate(-50%,-80%) scale(1.2); }
+    70% { opacity:1; transform: translate(-50%,-90%) scale(1); }
+    100%{ opacity:0; transform: translate(-50%,-120%) scale(0.8); }
+  }
+  .multiplier.pop { animation: pop-up 0.8s ease-out forwards; }
+
+  /* Decorative corners */
+  .corner { position: absolute; width: 20px; height: 20px; opacity: 0.3; }
+  .corner-tl { top: 8px; left: 8px; border-top: 2px solid var(--neon-cyan); border-left: 2px solid var(--neon-cyan); }
+  .corner-tr { top: 8px; right: 8px; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-cyan); }
+  .corner-bl { bottom: 8px; left: 8px; border-bottom: 2px solid var(--neon-cyan); border-left: 2px solid var(--neon-cyan); }
+  .corner-br { bottom: 8px; right: 8px; border-bottom: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-cyan); }
+
+  /* Instruction switch flicker */
+  @keyframes flicker-swap {
+    0%   { opacity:1; }
+    40%  { opacity:0; transform: scale(0.9); }
+    60%  { opacity:0; transform: scale(1.1); }
+    100% { opacity:1; transform: scale(1); }
+  }
+  .instruction-text.switch { animation: flicker-swap 0.25s ease-out forwards; }
+
+  /* Blinking cursor on idle */
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="cabinet" id="cabinet">
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+    <div class="flash-overlay" id="flash"></div>
+    <div class="special-banner" id="special-banner">⚡ BONUS ROUND</div>
+    <div class="multiplier" id="multiplier"></div>
+
+    <!-- START SCREEN -->
+    <div class="screen" id="screen-start">
+      <div class="screen-title">PANIC<br>BUTTON</div>
+      <div class="screen-sub">Think fast. React faster.<br>Panic anyway.</div>
+      <div class="screen-sub" style="font-size:9px; margin-top:4px; line-height:2">
+        CLICK · DOUBLE CLICK · PRESS SPACE<br>
+        HOLD · DON'T CLICK · WAIT...
+      </div>
+      <button class="btn-start" id="btn-start">PLAY</button>
+      <div style="font-size:9px; color: var(--dim); letter-spacing:2px; margin-top:8px">USE KEYBOARD + MOUSE</div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div class="screen hidden" id="screen-gameover">
+      <div class="go-title pulse">GAME<br>OVER</div>
+      <div class="go-message" id="go-message">Your brain lagged.</div>
+      <div class="go-scores">
+        <div class="go-score-box">
+          <span class="go-score-label">Score</span>
+          <div class="go-score-val" id="go-score">0</div>
+        </div>
+        <div class="go-score-box">
+          <span class="go-score-label">Best</span>
+          <div class="go-score-val" id="go-best">0</div>
+        </div>
+      </div>
+      <div class="go-rank" id="go-rank">BEGINNER</div>
+      <button class="btn-retry" id="btn-retry">RETRY</button>
+    </div>
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="game-title">PANIC BUTTON</div>
+      <div class="tagline">think fast · react faster · panic anyway</div>
+    </div>
+
+    <!-- SCORES -->
+    <div class="score-row">
+      <div class="score-box">
+        <span class="score-label">Score</span>
+        <div class="score-value" id="score-display">0</div>
+        <div class="rank-badge" id="rank-display">BEGINNER</div>
+      </div>
+      <div class="score-box">
+        <span class="score-label">Best</span>
+        <div class="score-value" id="best-display">0</div>
+      </div>
+    </div>
+
+    <!-- INSTRUCTION -->
+    <div class="instruction-area">
+      <div class="diff-label" id="diff-label">EASY</div>
+      <div class="instruction-text color-red" id="instruction-text">READY?</div>
+    </div>
+
+    <!-- TIMER -->
+    <div class="timer-wrap">
+      <div class="timer-row">
+        <span class="timer-label">Time</span>
+        <span class="timer-value" id="timer-val">2.0s</span>
+      </div>
+      <div class="timer-track">
+        <div class="timer-fill" id="timer-fill" style="width:100%"></div>
+      </div>
+    </div>
+
+    <!-- BUTTON AREA -->
+    <div class="button-area" id="button-area">
+      <button id="panic-btn">PANIC!</button>
+    </div>
+
+    <!-- FEEDBACK -->
+    <div class="feedback" id="feedback"></div>
+  </div>
+</div>
+
+<script>
+// ─── AUDIO ENGINE (Web Audio API – no files needed) ───
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+
+function beep(freq=440, type='square', dur=0.08, vol=0.3, delay=0) {
+  const o = AC.createOscillator();
+  const g = AC.createGain();
+  o.connect(g); g.connect(AC.destination);
+  o.type = type;
+  o.frequency.setValueAtTime(freq, AC.currentTime + delay);
+  g.gain.setValueAtTime(vol, AC.currentTime + delay);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + delay + dur);
+  o.start(AC.currentTime + delay);
+  o.stop(AC.currentTime + delay + dur + 0.01);
+}
+
+function playSuccess() {
+  beep(520,'sine',0.05,0.2);
+  beep(660,'sine',0.06,0.25,0.06);
+  beep(880,'sine',0.08,0.2,0.12);
+}
+
+function playFail() {
+  beep(220,'sawtooth',0.12,0.4);
+  beep(160,'sawtooth',0.15,0.35,0.1);
+  beep(110,'sawtooth',0.2,0.3,0.22);
+}
+
+function playTick() { beep(800,'square',0.03,0.08); }
+function playWarn() {
+  beep(660,'square',0.05,0.2);
+  beep(550,'square',0.05,0.2,0.1);
+}
+
+// ─── GAME DATA ───
+const RANKS = [
+  {min:0,  title:'BEGINNER'},
+  {min:5,  title:'FAST FINGERS'},
+  {min:10, title:'PANIC SURVIVOR'},
+  {min:20, title:'CHAOS MASTER'},
+  {min:35, title:'MIND NINJA'},
+  {min:50, title:'BUTTON GOD'},
+];
+
+const FAIL_MSGS = [
+  "Too slow.", "Your brain lagged.", "Panic detected.",
+  "Grandma reflexes.", "Reflex.exe stopped.", "404: Reaction not found.",
+  "Did you fall asleep?", "Close enough. (It wasn't.)",
+  "You had ONE job.", "The button is crying.",
+];
+
+// Instruction definitions
+// type: 'click'|'dblclick'|'rightclick'|'space'|'enter'|'wait'|'move'|'hold_space'
+const INSTRUCTIONS = [
+  { text: 'CLICK NOW',       type: 'click',       color: 'color-red'    },
+  { text: "DON'T CLICK",     type: 'wait',         color: 'color-cyan'   },
+  { text: 'PRESS SPACE',     type: 'space',        color: 'color-yellow' },
+  { text: 'PRESS ENTER',     type: 'enter',        color: 'color-green'  },
+  { text: 'DOUBLE CLICK',    type: 'dblclick',     color: 'color-orange' },
+  { text: 'WAIT...',         type: 'wait',         color: 'color-purple' },
+  { text: 'HIT IT!',         type: 'click',        color: 'color-red'    },
+  { text: 'RIGHT CLICK',     type: 'rightclick',   color: 'color-purple' },
+  { text: 'MOVE MOUSE FAST', type: 'move',         color: 'color-cyan'   },
+  { text: 'HOLD SPACE',      type: 'hold_space',   color: 'color-orange' },
+  { text: 'PRESS A',         type: 'key_a',        color: 'color-green'  },
+  { text: 'STAY STILL',      type: 'wait',         color: 'color-purple' },
+  { text: 'SMASH IT!',       type: 'click',        color: 'color-red'    },
+  { text: "DON'T MOVE",      type: 'wait',         color: 'color-cyan'   },
+  { text: 'NOW!!!',          type: 'click',        color: 'color-red'    },
+];
+
+const BTN_LABELS = {
+  click:      ['PANIC!', 'CLICK ME', 'HIT IT', 'SMASH!'],
+  wait:       ['NO TOUCH', 'WAIT...', "DON'T!", 'STOP'],
+  dblclick:   ['CLICK ME', 'DOUBLE!', 'TWO TIMES'],
+  rightclick: ['RIGHT ME', 'R-CLICK'],
+  move:       ['MOVE!', 'SHAKE!'],
+  hold_space: ['HOLD...', 'SPACE BAR'],
+  space:      ['PRESS SPACE', 'PANIC!'],
+  enter:      ['ENTER', 'GO!'],
+  key_a:      ['PRESS A', 'A KEY'],
+};
+
+const BTN_COLORS = ['', 'blue', 'green', 'yellow'];
+
+const DIFF_LEVELS = [
+  { name: 'EASY',   time: 2000, maxScore: 5  },
+  { name: 'MEDIUM', time: 1500, maxScore: 10 },
+  { name: 'HARD',   time: 1000, maxScore: 20 },
+  { name: 'CHAOS',  time: 700,  maxScore: Infinity },
+];
+
+// ─── STATE ───
+let score = 0;
+let bestScore = parseInt(localStorage.getItem('panicBest') || '0');
+let gameActive = false;
+let timerRAF = null;
+let timerStart = 0;
+let timerDuration = 2000;
+let currentInstruction = null;
+let mouseMovedEnough = false;
+let mouseMoveDist = 0;
+let lastMouseX = 0;
+let lastMouseY = 0;
+let holdSpaceActive = false;
+let holdSpaceTimer = null;
+let waitTimer = null;
+let roundEnded = false;
+let specialRound = null; // null | 'bonus' | 'reverse'
+let scoreMultiplier = 1;
+let consecutiveCorrect = 0;
+let switchTimer = null;
+let teleportActive = false;
+let prevInstruction = null;
+
+// ─── ELEMENTS ───
+const cabinet       = document.getElementById('cabinet');
+const flash         = document.getElementById('flash');
+const specialBanner = document.getElementById('special-banner');
+const multiplierEl  = document.getElementById('multiplier');
+const screenStart   = document.getElementById('screen-start');
+const screenGameover= document.getElementById('screen-gameover');
+const btnStart      = document.getElementById('btn-start');
+const btnRetry      = document.getElementById('btn-retry');
+const scoreDisplay  = document.getElementById('score-display');
+const bestDisplay   = document.getElementById('best-display');
+const rankDisplay   = document.getElementById('rank-display');
+const timerFill     = document.getElementById('timer-fill');
+const timerVal      = document.getElementById('timer-val');
+const instructionEl = document.getElementById('instruction-text');
+const diffLabel     = document.getElementById('diff-label');
+const feedback      = document.getElementById('feedback');
+const panicBtn      = document.getElementById('panic-btn');
+const buttonArea    = document.getElementById('button-area');
+const goScore       = document.getElementById('go-score');
+const goBest        = document.getElementById('go-best');
+const goMessage     = document.getElementById('go-message');
+const goRank        = document.getElementById('go-rank');
+
+// ─── HELPERS ───
+function getRank(s) {
+  let r = RANKS[0];
+  for (const rank of RANKS) if (s >= rank.min) r = rank;
+  return r.title;
+}
+
+function getDiff(s) {
+  let d = DIFF_LEVELS[0];
+  for (const lvl of DIFF_LEVELS) if (s >= lvl.maxScore) continue; else { d = lvl; break; }
+  // Actually use score ranges
+  if (s >= 20) d = DIFF_LEVELS[3];
+  else if (s >= 10) d = DIFF_LEVELS[2];
+  else if (s >= 5) d = DIFF_LEVELS[1];
+  else d = DIFF_LEVELS[0];
+  return d;
+}
+
+function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function pick(arr, exclude) {
+  const filtered = arr.filter(x => x !== exclude);
+  return rand(filtered.length ? filtered : arr);
+}
+
+function updateScoreDisplay() {
+  scoreDisplay.textContent = score;
+  bestDisplay.textContent = bestScore;
+  rankDisplay.textContent = getRank(score);
+  scoreDisplay.classList.add('pop');
+  setTimeout(() => scoreDisplay.classList.remove('pop'), 150);
+}
+
+function flashScreen(type) {
+  flash.className = 'flash-overlay show-' + type;
+  setTimeout(() => flash.className = 'flash-overlay', 300);
+}
+
+function shakeScreen() {
+  cabinet.classList.add('shake');
+  setTimeout(() => cabinet.classList.remove('shake'), 400);
+}
+
+function showFeedback(msg, type) {
+  feedback.textContent = msg;
+  feedback.className = 'feedback show ' + type;
+  setTimeout(() => feedback.className = 'feedback', 800);
+}
+
+function resetBtn() {
+  panicBtn.style.position = '';
+  panicBtn.style.left = '';
+  panicBtn.style.top = '';
+  panicBtn.className = '';
+  teleportActive = false;
+}
+
+function setButtonColor(color) {
+  panicBtn.className = color || '';
+  if (teleportActive) panicBtn.className += ' teleport';
+}
+
+function teleportButton() {
+  const area = buttonArea.getBoundingClientRect();
+  const bw = 130, bh = 130;
+  const margin = 20;
+  const maxX = area.width - bw - margin;
+  const maxY = area.height - bh - margin;
+  const nx = margin + Math.random() * Math.max(0, maxX - margin);
+  const ny = margin + Math.random() * Math.max(0, maxY - margin);
+  panicBtn.style.position = 'absolute';
+  panicBtn.style.left = nx + 'px';
+  panicBtn.style.top = ny + 'px';
+  teleportActive = true;
+}
+
+function popMultiplier(text) {
+  multiplierEl.textContent = text;
+  multiplierEl.className = 'multiplier pop';
+  setTimeout(() => multiplierEl.className = 'multiplier', 900);
+}
+
+// ─── TIMER ───
+function startTimer(duration) {
+  clearRoundTimers();
+  timerDuration = duration;
+  timerStart = performance.now();
+  roundEnded = false;
+
+  function tick() {
+    const elapsed = performance.now() - timerStart;
+    const pct = Math.max(0, 1 - elapsed / timerDuration);
+    timerFill.style.width = (pct * 100) + '%';
+    const remaining = Math.max(0, (timerDuration - elapsed) / 1000);
+    timerVal.textContent = remaining.toFixed(1) + 's';
+
+    if (pct < 0.3)       { timerFill.className = 'timer-fill danger'; }
+    else if (pct < 0.5)  { timerFill.className = 'timer-fill warn'; }
+    else                 { timerFill.className = 'timer-fill'; }
+
+    if (pct < 0.25 && Math.random() < 0.06) playWarn();
+    if (pct < 0.15) shakeScreen();
+
+    if (elapsed >= timerDuration) {
+      timerFill.style.width = '0%';
+      handleTimeout();
+    } else {
+      timerRAF = requestAnimationFrame(tick);
+    }
+  }
+  timerRAF = requestAnimationFrame(tick);
+}
+
+function clearRoundTimers() {
+  cancelAnimationFrame(timerRAF);
+  clearTimeout(waitTimer);
+  clearTimeout(holdSpaceTimer);
+  clearTimeout(switchTimer);
+}
+
+// ─── ROUND LOGIC ───
+function startRound() {
+  if (!gameActive) return;
+  resetBtn();
+  mouseMovedEnough = false;
+  mouseMoveDist = 0;
+  holdSpaceActive = false;
+  consecutiveCorrect++;
+
+  const diff = getDiff(score);
+  diffLabel.textContent = diff.name;
+
+  // Special round check (every 7 rounds)
+  if (score > 0 && score % 7 === 0) {
+    specialRound = Math.random() < 0.5 ? 'bonus' : 'reverse';
+    scoreMultiplier = specialRound === 'bonus' ? 3 : 1;
+  } else {
+    specialRound = null;
+    scoreMultiplier = 1;
+  }
+
+  // Show special banner
+  if (specialRound === 'bonus') {
+    specialBanner.textContent = '⚡ BONUS ROUND — x3 POINTS';
+    specialBanner.classList.add('show');
+    setTimeout(() => specialBanner.classList.remove('show'), 1800);
+  } else if (specialRound === 'reverse') {
+    specialBanner.textContent = '🔄 REVERSE ROUND — THINK OPPOSITE';
+    specialBanner.classList.add('show');
+    setTimeout(() => specialBanner.classList.remove('show'), 1800);
+  }
+
+  // Pick instruction (avoid repeat)
+  let inst = pick(INSTRUCTIONS, prevInstruction);
+  prevInstruction = inst;
+
+  // Reverse round: flip between click/wait
+  if (specialRound === 'reverse') {
+    inst = { ...inst };
+    if (inst.type === 'click') inst.type = 'wait';
+    else if (inst.type === 'wait') inst.type = 'click';
+  }
+
+  currentInstruction = inst;
+
+  // Trick: instruction switch mid-round (20% chance, score >= 5)
+  if (score >= 5 && Math.random() < 0.20) {
+    scheduleInstructionSwitch(inst, diff.time);
+  }
+
+  // Trick: button teleport (score >= 8, 30% chance)
+  if (score >= 8 && (inst.type === 'click' || inst.type === 'dblclick') && Math.random() < 0.3) {
+    teleportButton();
+  }
+
+  // Set button label & color
+  const lbls = BTN_LABELS[inst.type] || BTN_LABELS.click;
+  panicBtn.textContent = rand(lbls);
+
+  // Trick: wrong color button (30% chance, score >= 3)
+  const colorClass = (score >= 3 && Math.random() < 0.3)
+    ? rand(BTN_COLORS.filter(c => c !== ''))
+    : '';
+  setButtonColor(colorClass);
+
+  // Display instruction
+  instructionEl.className = 'instruction-text ' + inst.color + ' appear';
+  instructionEl.textContent = specialRound === 'reverse'
+    ? inst.text + ' (REVERSED!)'
+    : inst.text;
+
+  // Wait-type: auto-succeed after full duration
+  if (inst.type === 'wait') {
+    waitTimer = setTimeout(() => {
+      if (!roundEnded) handleCorrect();
+    }, diff.time - 50);
+  }
+
+  // Hold space: hold for at least 400ms
+  // (handled via keydown/keyup)
+
+  startTimer(diff.time);
+}
+
+function scheduleInstructionSwitch(originalInst, totalTime) {
+  const switchAt = totalTime * (0.4 + Math.random() * 0.3);
+  switchTimer = setTimeout(() => {
+    if (roundEnded) return;
+    // Switch to click instruction
+    const newInst = {
+      text: rand(['CLICK NOW!!!', 'NOW!!!', 'HIT IT!!!', 'GO GO GO!']),
+      type: 'click',
+      color: 'color-red',
+    };
+    if (specialRound === 'reverse') newInst.type = 'wait';
+    currentInstruction = newInst;
+    instructionEl.classList.add('switch');
+    setTimeout(() => {
+      instructionEl.textContent = newInst.text;
+      instructionEl.className = 'instruction-text color-red switch';
+      setTimeout(() => instructionEl.classList.remove('switch'), 250);
+    }, 125);
+    // Cancel wait timer if original was wait
+    clearTimeout(waitTimer);
+    if (newInst.type === 'wait') {
+      waitTimer = setTimeout(() => {
+        if (!roundEnded) handleCorrect();
+      }, getDiff(score).time - switchAt - 50);
+    }
+    playTick();
+  }, switchAt);
+}
+
+function handleCorrect() {
+  if (roundEnded) return;
+  roundEnded = true;
+  clearRoundTimers();
+
+  const earned = 1 * scoreMultiplier;
+  score += earned;
+  if (score > bestScore) { bestScore = score; localStorage.setItem('panicBest', bestScore); }
+  updateScoreDisplay();
+  flashScreen('green');
+  playSuccess();
+  showFeedback(earned > 1 ? '✓ +' + earned + '  BONUS!' : '✓ CORRECT', 'ok');
+  if (earned > 1) popMultiplier('×' + scoreMultiplier);
+
+  setTimeout(startRound, 250);
+}
+
+function handleWrong() {
+  if (roundEnded) return;
+  roundEnded = true;
+  clearRoundTimers();
+  gameOver();
+}
+
+function handleTimeout() {
+  if (roundEnded) return;
+  // Timeout: correct only if instruction was 'wait' type
+  if (currentInstruction && currentInstruction.type === 'wait') {
+    handleCorrect();
+  } else {
+    roundEnded = true;
+    clearRoundTimers();
+    gameOver();
+  }
+}
+
+// ─── ACTION HANDLERS ───
+function handleClick(e) {
+  if (!gameActive || roundEnded) return;
+  if (!currentInstruction) return;
+  e.preventDefault();
+
+  const t = currentInstruction.type;
+  if (t === 'click') handleCorrect();
+  else handleWrong();
+}
+
+let lastClickTime = 0;
+function handleDblClick(e) {
+  if (!gameActive || roundEnded) return;
+  e.preventDefault();
+  const t = currentInstruction.type;
+  if (t === 'dblclick') handleCorrect();
+  else handleWrong();
+}
+
+function handleRightClick(e) {
+  if (!gameActive) return;
+  e.preventDefault();
+  if (roundEnded) return;
+  const t = currentInstruction.type;
+  if (t === 'rightclick') handleCorrect();
+  else handleWrong();
+}
+
+function handleKeyDown(e) {
+  if (!gameActive || roundEnded) return;
+  const key = e.code;
+  if (key === 'Space') {
+    e.preventDefault();
+    const t = currentInstruction.type;
+    if (t === 'space') { handleCorrect(); return; }
+    if (t === 'hold_space') {
+      // start hold timer
+      if (!holdSpaceActive) {
+        holdSpaceActive = true;
+        holdSpaceTimer = setTimeout(() => {
+          if (holdSpaceActive && !roundEnded) handleCorrect();
+        }, 400);
+      }
+      return;
+    }
+    // any other instruction: wrong
+    handleWrong();
+  }
+  if (key === 'Enter') {
+    e.preventDefault();
+    if (currentInstruction.type === 'enter') handleCorrect();
+    else handleWrong();
+  }
+  if (key === 'KeyA') {
+    if (currentInstruction.type === 'key_a') handleCorrect();
+    else handleWrong();
+  }
+}
+
+function handleKeyUp(e) {
+  if (e.code === 'Space') {
+    if (holdSpaceActive) {
+      holdSpaceActive = false;
+      clearTimeout(holdSpaceTimer);
+      // If released too early during hold_space
+      if (!roundEnded && currentInstruction && currentInstruction.type === 'hold_space') {
+        handleWrong();
+      }
+    }
+  }
+}
+
+function handleMouseMove(e) {
+  if (!gameActive || roundEnded) return;
+  const dx = e.clientX - lastMouseX;
+  const dy = e.clientY - lastMouseY;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  mouseMoveDist += dist;
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+
+  if (mouseMoveDist > 80 && currentInstruction && currentInstruction.type === 'move' && !roundEnded) {
+    handleCorrect();
+  }
+
+  // Wrong move: if instruction is 'wait' and mouse moved
+  // (only trigger if big movement)
+  if (mouseMoveDist > 60 && currentInstruction &&
+      (currentInstruction.type === 'wait') && !roundEnded) {
+    handleWrong();
+  }
+}
+
+// ─── GAME OVER ───
+function gameOver() {
+  gameActive = false;
+  shakeScreen();
+  flashScreen('red');
+  playFail();
+
+  if (score > bestScore) { bestScore = score; localStorage.setItem('panicBest', bestScore); }
+
+  goScore.textContent = score;
+  goBest.textContent = bestScore;
+  goMessage.textContent = rand(FAIL_MSGS);
+  goRank.textContent = getRank(score);
+  screenGameover.classList.remove('hidden');
+}
+
+// ─── START / RESET ───
+function startGame() {
+  score = 0;
+  consecutiveCorrect = 0;
+  prevInstruction = null;
+  specialRound = null;
+  scoreMultiplier = 1;
+  gameActive = true;
+  updateScoreDisplay();
+  screenStart.classList.add('hidden');
+  screenGameover.classList.add('hidden');
+  timerFill.style.width = '100%';
+  timerFill.className = 'timer-fill';
+  startRound();
+}
+
+// ─── EVENT LISTENERS ───
+btnStart.addEventListener('click', startGame);
+btnRetry.addEventListener('click', startGame);
+
+panicBtn.addEventListener('click', handleClick);
+panicBtn.addEventListener('dblclick', handleDblClick);
+panicBtn.addEventListener('contextmenu', handleRightClick);
+
+// Also catch clicks outside the button for 'wait' violations
+document.addEventListener('click', (e) => {
+  if (!gameActive || roundEnded) return;
+  if (!currentInstruction) return;
+  // Only flag wrong if the instruction is 'wait' and they clicked anywhere
+  if (currentInstruction.type === 'wait' && e.target !== panicBtn) {
+    handleWrong();
+  }
+});
+
+document.addEventListener('keydown', handleKeyDown);
+document.addEventListener('keyup', handleKeyUp);
+document.addEventListener('mousemove', handleMouseMove);
+document.addEventListener('contextmenu', (e) => { if (gameActive) e.preventDefault(); });
+
+// Init
+updateScoreDisplay();
+bestDisplay.textContent = bestScore;
+</script>
+</body>
+</html>
