@@ -8,22 +8,22 @@
 <title>PANIC BUTTON</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
-
+ 
 :root {
   --red:#ff1133;--yellow:#ffe500;--cyan:#00eeff;--green:#2dff00;
   --purple:#cc00ff;--orange:#ff5500;--dim:#44446a;--text:#ddddf5;
   --panel:#08080f;--border:#14142a;
 }
-
+ 
 *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
 html,body{width:100%;height:100%;height:100dvh;background:#030306;font-family:'Share Tech Mono',monospace;color:var(--text);overflow:hidden;}
-
+ 
 /* scanlines */
 body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(transparent 0,transparent 2px,rgba(0,0,0,.1) 2px,rgba(0,0,0,.1) 3px);pointer-events:none;z-index:9998;}
-
+ 
 #bgcanvas{position:fixed;inset:0;z-index:0;}
 #app{width:100%;height:100%;height:100dvh;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;}
-
+ 
 /* ── CABINET ── */
 .cab{
   width:min(440px,100vw);
@@ -49,21 +49,21 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
   65%{transform:translate(-3px,2px) rotate(-.5deg)}
   80%{transform:translate(2px,-1px) rotate(.3deg)}
 }
-
+ 
 /* corruption canvas */
 .corrupt-ov{position:absolute;inset:0;pointer-events:none;z-index:90;border-radius:inherit;opacity:1;mix-blend-mode:screen;}
-
+ 
 /* ── HEADER ── */
 .hdr{width:100%;background:#03030a;border-bottom:1px solid var(--border);padding:clamp(8px,2.5vw,14px) 18px clamp(7px,2vw,12px);text-align:center;flex-shrink:0;}
 .game-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(24px,6.5vw,38px);letter-spacing:clamp(6px,2vw,10px);color:var(--red);text-shadow:0 0 12px #ff1133,0 0 35px #ff113388,0 0 70px #ff113344;line-height:1;}
 .tagline{font-size:clamp(7px,2vw,9px);color:var(--dim);letter-spacing:2px;margin-top:2px;text-transform:uppercase;}
-
+ 
 /* heartbeat stripe */
 .hb-stripe{width:100%;height:3px;position:relative;overflow:hidden;background:#08080f;flex-shrink:0;}
 .hb-stripe::after{content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,var(--red),transparent);opacity:0;}
 .hb-stripe.pulse::after{animation:hb-wave .35s ease-out forwards;}
 @keyframes hb-wave{0%{left:-60%;opacity:0}30%{opacity:1}100%{left:140%;opacity:0}}
-
+ 
 /* ── LIVES + DIFF ── */
 .top-row{display:flex;align-items:center;gap:7px;padding:clamp(6px,2vw,10px) 16px 0;width:100%;flex-shrink:0;}
 .lives-lbl{font-size:clamp(7px,2vw,9px);letter-spacing:2px;color:var(--dim);text-transform:uppercase;}
@@ -78,7 +78,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .dp-hard  {color:var(--orange);border-color:#ff550044;}
 .dp-chaos {color:var(--red);border-color:#ff113344;animation:dp-chaos .4s ease-in-out infinite alternate;}
 @keyframes dp-chaos{from{text-shadow:0 0 5px #ff1133}to{text-shadow:0 0 14px #ff1133,0 0 28px #ff113366}}
-
+ 
 /* ── SCORES ── */
 .score-row{display:flex;gap:8px;padding:clamp(6px,2vw,9px) 16px 0;width:100%;flex-shrink:0;}
 .sbox{flex:1;background:#05050d;border:1px solid var(--border);border-radius:8px;padding:clamp(6px,2vw,8px) 10px;text-align:center;position:relative;overflow:hidden;}
@@ -87,7 +87,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .sval{font-family:'Bebas Neue',sans-serif;font-size:clamp(30px,9vw,40px);line-height:1;color:var(--yellow);text-shadow:0 0 10px #ffe500,0 0 28px #ffe50077;transition:transform .1s;}
 .sval.pop{transform:scale(1.4);color:var(--green);text-shadow:0 0 12px #2dff00,0 0 30px #2dff0088;}
 .rank-lbl{font-size:clamp(7px,2vw,9px);letter-spacing:1px;margin-top:1px;color:var(--cyan);text-shadow:0 0 8px #00eeff;}
-
+ 
 /* ── STREAK ── */
 .streak-row{display:flex;align-items:center;gap:7px;padding:clamp(5px,1.5vw,8px) 16px 0;width:100%;flex-shrink:0;}
 .stk-lbl{font-size:clamp(7px,2vw,9px);letter-spacing:2px;color:var(--dim);text-transform:uppercase;}
@@ -97,14 +97,14 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 @keyframes stk-hot{from{box-shadow:0 0 6px var(--yellow)}to{box-shadow:0 0 18px var(--yellow),0 0 30px #ffe50066}}
 .stk-val{font-size:clamp(9px,3vw,12px);color:var(--purple);min-width:22px;text-align:right;transition:color .3s;}
 .stk-val.hot{color:var(--yellow);text-shadow:0 0 6px var(--yellow);}
-
+ 
 /* ── INSTRUCTION AREA ── */
 .inst-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;position:relative;padding:8px 12px;min-height:0;}
-
+ 
 .taunt{font-size:clamp(8px,2.5vw,10px);letter-spacing:3px;color:var(--dim);text-transform:uppercase;margin-bottom:5px;min-height:13px;transition:color .2s;}
 .taunt.hot{color:var(--red);text-shadow:0 0 6px #ff1133;animation:taunt-flash .15s ease-in-out infinite alternate;}
 @keyframes taunt-flash{from{opacity:1}to{opacity:.5}}
-
+ 
 .inst{font-family:'Black Han Sans',sans-serif;font-size:clamp(28px,9vw,54px);text-align:center;line-height:1.0;letter-spacing:2px;padding:0 4px;will-change:transform;}
 .cr {color:var(--red);   text-shadow:0 0 14px #ff1133,0 0 40px #ff113366;}
 .cy {color:var(--cyan);  text-shadow:0 0 14px #00eeff,0 0 40px #00eeff66;}
@@ -112,7 +112,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .cy2{color:var(--yellow);text-shadow:0 0 14px #ffe500,0 0 40px #ffe50066;}
 .cp {color:var(--purple);text-shadow:0 0 14px #cc00ff,0 0 40px #cc00ff66;}
 .co {color:var(--orange);text-shadow:0 0 14px #ff5500,0 0 40px #ff550066;}
-
+ 
 @keyframes inst-slam{0%{opacity:0;transform:scale(.3) rotate(-8deg)}55%{opacity:1;transform:scale(1.12) rotate(2deg)}75%{transform:scale(.97) rotate(-1deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
 @keyframes inst-out {0%{opacity:1;transform:scale(1)}40%{opacity:0;transform:scale(1.3) rotate(5deg)}100%{opacity:0}}
 @keyframes inst-jitter{0%,100%{transform:translate(0,0)}20%{transform:translate(-3px,2px)}40%{transform:translate(3px,-2px)}60%{transform:translate(-2px,3px)}80%{transform:translate(2px,-1px)}}
@@ -120,24 +120,24 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .inst.leaving{animation:inst-out .15s ease-in forwards;}
 .inst.jitter {animation:inst-jitter .12s ease-in-out infinite;}
 @keyframes cr-pulse{from{text-shadow:0 0 14px #ff1133,0 0 40px #ff113366}to{text-shadow:0 0 30px #ff1133,0 0 60px #ff1133,0 0 80px #ff113388}}
-
+ 
 .sub-inst{font-size:clamp(9px,2.5vw,11px);letter-spacing:2px;color:var(--dim);margin-top:5px;text-transform:uppercase;min-height:13px;}
-
+ 
 /* hold-progress ring (for hold instructions on mobile) */
 .hold-ring{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);opacity:0;pointer-events:none;transition:opacity .15s;}
 .hold-ring.show{opacity:1;}
 .hold-ring svg{width:44px;height:44px;transform:rotate(-90deg);}
 .hr-bg{fill:none;stroke:#14142a;stroke-width:4;}
 .hr-fill{fill:none;stroke:var(--orange);stroke-width:4;stroke-linecap:round;stroke-dasharray:113;stroke-dashoffset:113;transition:stroke-dashoffset .05s linear;}
-
+ 
 .glitch-txt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Bebas Neue',sans-serif;font-size:clamp(26px,8vw,50px);pointer-events:none;opacity:0;white-space:nowrap;text-shadow:2px 0 var(--red),-2px 0 var(--cyan);}
 @keyframes glitch-show{0%{opacity:0;transform:translate(-50%,-50%) skewX(20deg)}10%{opacity:1;transform:translate(-52%,-50%) skewX(-5deg)}30%{opacity:1;transform:translate(-50%,-50%) skewX(0)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) skewX(3deg)}}
 .glitch-txt.show{animation:glitch-show .6s ease-out forwards;}
-
+ 
 .near-miss-el{position:absolute;top:5px;left:50%;transform:translateX(-50%);font-family:'Bebas Neue',sans-serif;font-size:clamp(11px,3vw,13px);letter-spacing:3px;color:var(--yellow);text-shadow:0 0 10px var(--yellow);opacity:0;pointer-events:none;white-space:nowrap;}
 @keyframes nm{0%{opacity:0;transform:translateX(-50%) scale(.4)}25%{opacity:1;transform:translateX(-50%) scale(1.2)}75%{opacity:1;transform:translateX(-50%) scale(1)}100%{opacity:0;transform:translateX(-50%) scale(.9)}}
 .near-miss-el.show{animation:nm 1s ease-out forwards;}
-
+ 
 /* ── TIMER ── */
 .timer-wrap{width:calc(100% - 32px);margin:0 16px;flex-shrink:0;}
 .timer-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
@@ -150,10 +150,10 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .timer-bar.warn  {background:var(--yellow);box-shadow:0 0 10px var(--yellow);}
 .timer-bar.danger{background:var(--red);box-shadow:0 0 16px var(--red);animation:tbar-pulse .25s ease-in-out infinite alternate;}
 @keyframes tbar-pulse{from{box-shadow:0 0 8px var(--red)}to{box-shadow:0 0 22px #ff1133,0 0 44px #ff113366}}
-
+ 
 /* ── BUTTON ZONE ── */
 .btn-zone{position:relative;width:100%;flex:0 0 clamp(130px,35vw,160px);display:flex;align-items:center;justify-content:center;margin:clamp(4px,1.5vw,8px) 0 clamp(3px,1vw,6px);}
-
+ 
 #pb{
   width:clamp(110px,28vw,134px);height:clamp(110px,28vw,134px);
   border-radius:50%;border:none;cursor:pointer;
@@ -181,17 +181,17 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 #pb.danger-pulse{animation:pb-danger .22s ease-in-out infinite alternate !important;}
 @keyframes pb-danger{from{box-shadow:0 8px 0 #88000e,0 12px 28px rgba(255,17,51,.55),inset 0 1px 0 rgba(255,255,255,.32)}to{box-shadow:0 8px 0 #88000e,0 12px 55px rgba(255,17,51,1),0 0 38px rgba(255,17,51,.6),inset 0 1px 0 rgba(255,255,255,.32)}}
 #pb.teleport-out{opacity:0;transform:scale(0) !important;}
-
+ 
 /* decoys */
 .decoy{width:68px;height:68px;border-radius:50%;border:none;cursor:pointer;position:absolute;font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1px;box-shadow:0 4px 0 rgba(0,0,0,.5),0 7px 14px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.2);outline:none;animation:decoy-in .15s ease-out;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);-webkit-touch-callout:none;}
 .decoy:active{transform:translateY(3px) !important;}
 @keyframes decoy-in{from{transform:scale(0) rotate(-15deg);opacity:0}to{transform:scale(1);opacity:1}}
-
+ 
 /* combo */
 .combo-lbl{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-family:'Bebas Neue',sans-serif;font-size:clamp(11px,3vw,14px);letter-spacing:4px;color:var(--orange);text-shadow:0 0 10px #ff5500;white-space:nowrap;opacity:0;pointer-events:none;}
 @keyframes cl-in{0%{opacity:0;transform:translateX(-50%) scale(.4)}35%{opacity:1;transform:translateX(-50%) scale(1.25)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
 .combo-lbl.show{animation:cl-in .3s ease-out forwards;}
-
+ 
 /* ── OVERLAYS ── */
 .flash-ov{position:absolute;inset:0;pointer-events:none;opacity:0;z-index:91;border-radius:inherit;transition:opacity .07s;}
 .flash-ov.fg{background:rgba(45,255,0,.2);  opacity:1;}
@@ -199,11 +199,11 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .flash-ov.fy{background:rgba(255,229,0,.22); opacity:1;}
 .flash-ov.fb{background:rgba(0,200,255,.18); opacity:1;}
 .flash-ov.fw{background:rgba(255,255,255,.15);opacity:1;}
-
+ 
 .frenzy-ring{position:absolute;inset:-3px;border-radius:21px;border:3px solid var(--red);opacity:0;pointer-events:none;z-index:92;}
 .frenzy-ring.on{opacity:1;animation:fr-pulse .35s ease-in-out infinite alternate;}
 @keyframes fr-pulse{from{box-shadow:0 0 12px #ff1133,inset 0 0 12px #ff113322}to{box-shadow:0 0 35px #ff1133,0 0 60px #ff113355,inset 0 0 20px #ff113333}}
-
+ 
 .sp-ban{position:absolute;top:62px;left:50%;transform:translateX(-50%);font-family:'Bebas Neue',sans-serif;font-size:clamp(10px,3vw,13px);letter-spacing:3px;padding:3px 14px;border-radius:3px;z-index:88;opacity:0;pointer-events:none;white-space:nowrap;transition:opacity .2s;}
 .sp-ban.bonus  {background:var(--yellow);color:#000;}
 .sp-ban.reverse{background:var(--purple);color:#fff;}
@@ -211,22 +211,22 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .sp-ban.silent {background:var(--cyan);color:#000;}
 @keyframes fban-flash{from{background:#ff1133}to{background:#ff6600}}
 .sp-ban.on{opacity:1;}
-
+ 
 .pts-float{position:absolute;font-family:'Bebas Neue',sans-serif;font-size:clamp(24px,7vw,32px);letter-spacing:2px;color:var(--green);text-shadow:0 0 12px #2dff00;pointer-events:none;opacity:0;z-index:200;}
 @keyframes pf{0%{opacity:0;transform:translateY(0) scale(.5)}20%{opacity:1;transform:translateY(-16px) scale(1.15)}75%{opacity:1;transform:translateY(-50px) scale(1)}100%{opacity:0;transform:translateY(-68px) scale(.85)}}
 .pts-float.pop{animation:pf .8s ease-out forwards;}
-
+ 
 .big-mult{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);font-family:'Bebas Neue',sans-serif;font-size:clamp(70px,20vw,110px);letter-spacing:4px;color:var(--yellow);text-shadow:0 0 16px #ffe500,0 0 50px #ffe50088;pointer-events:none;opacity:0;z-index:200;}
 @keyframes bm{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(-15deg)}35%{opacity:1;transform:translate(-50%,-60%) scale(1.4) rotate(4deg)}65%{opacity:1;transform:translate(-50%,-65%) scale(1.05) rotate(-1deg)}100%{opacity:0;transform:translate(-50%,-95%) scale(.8)}}
 .big-mult.pop{animation:bm 1.1s ease-out forwards;}
-
+ 
 /* ── FEEDBACK ── */
 .feedback{height:20px;font-size:clamp(10px,3vw,12px);letter-spacing:3px;text-align:center;text-transform:uppercase;opacity:0;transition:opacity .2s;flex-shrink:0;}
 .feedback.show{opacity:1;}
 .feedback.ok   {color:var(--green); text-shadow:0 0 8px #2dff00;}
 .feedback.bad  {color:var(--red);   text-shadow:0 0 8px #ff1133;}
 .feedback.bonus{color:var(--yellow);text-shadow:0 0 8px #ffe500;}
-
+ 
 /* ── LAST CHANCE ── */
 .lc-ov{position:absolute;inset:0;z-index:150;border-radius:inherit;pointer-events:none;display:flex;align-items:center;justify-content:center;opacity:0;}
 .lc-ov.show{animation:lc-flash .6s ease-out forwards;}
@@ -234,7 +234,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .lc-txt{font-family:'Bebas Neue',sans-serif;font-size:clamp(40px,12vw,60px);letter-spacing:5px;color:#fff;text-shadow:0 0 30px #ff1133,0 0 60px #ff1133;pointer-events:none;opacity:0;}
 .lc-ov.show .lc-txt{animation:lc-txt .6s ease-out forwards;}
 @keyframes lc-txt{0%{opacity:0;transform:scale(2)}30%{opacity:1;transform:scale(1.1)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}
-
+ 
 /* ── SCREENS ── */
 .screen{position:absolute;inset:0;background:var(--panel);border-radius:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:250;padding:clamp(20px,5vw,30px) clamp(16px,5vw,28px);text-align:center;gap:clamp(8px,2.5vw,12px);overflow-y:auto;}
 .screen.off{display:none;}
@@ -248,7 +248,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .hs-num{font-family:'Bebas Neue',sans-serif;font-size:clamp(32px,10vw,40px);color:var(--cyan);text-shadow:0 0 12px #00eeff;line-height:1;}
 .btn-cta{background:none;border:2px solid var(--cyan);color:var(--cyan);font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,6vw,26px);letter-spacing:7px;padding:clamp(10px,3vw,14px) clamp(28px,8vw,40px);cursor:pointer;border-radius:4px;text-shadow:0 0 10px #00eeff;box-shadow:0 0 16px rgba(0,238,255,.18);transition:all .15s;-webkit-tap-highlight-color:transparent;}
 .btn-cta:active{background:rgba(0,238,255,.12);box-shadow:0 0 28px rgba(0,238,255,.5);transform:scale(.97);}
-
+ 
 /* game over */
 .go-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(42px,12vw,64px);letter-spacing:5px;color:var(--red);text-shadow:0 0 14px #ff1133,0 0 50px #ff113388;animation:go-blink .7s ease-in-out infinite;}
 @keyframes go-blink{0%,100%{opacity:1}50%{opacity:.5}}
@@ -261,14 +261,14 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
 .go-died{font-size:clamp(8px,2.2vw,9px);letter-spacing:2px;color:var(--dim);}
 .new-best-badge{font-size:clamp(9px,2.5vw,11px);letter-spacing:4px;color:var(--green);text-shadow:0 0 12px #2dff00;animation:nb .5s ease-out;}
 @keyframes nb{0%{opacity:0;transform:scale(.3)}60%{transform:scale(1.25)}100%{opacity:1;transform:scale(1)}}
-
+ 
 .corner{position:absolute;width:12px;height:12px;opacity:.16;}
 .c-tl{top:7px;left:7px;border-top:2px solid var(--cyan);border-left:2px solid var(--cyan);}
 .c-tr{top:7px;right:7px;border-top:2px solid var(--cyan);border-right:2px solid var(--cyan);}
 .c-bl{bottom:7px;left:7px;border-bottom:2px solid var(--cyan);border-left:2px solid var(--cyan);}
 .c-br{bottom:7px;right:7px;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan);}
 .hidden{display:none!important;}
-
+ 
 /* ── SWIPE ARROW INDICATOR ── */
 .swipe-arrow{position:absolute;font-size:clamp(28px,8vw,38px);pointer-events:none;opacity:0;z-index:201;}
 @keyframes arrow-up   {0%{opacity:0;transform:translateY(0)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-50px)}}
@@ -294,7 +294,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
     <div class="big-mult"   id="big-mult"></div>
     <div class="pts-float"  id="pts-float"></div>
     <div class="lc-ov"      id="lc-ov"><div class="lc-txt" id="lc-txt"></div></div>
-
+ 
     <!-- START -->
     <div class="screen" id="scr-start">
       <div class="s-logo">PANIC<br>BUTTON</div>
@@ -305,7 +305,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
       <div class="hs-panel"><span class="hs-lbl">Best Score</span><div class="hs-num" id="hs-num">0</div></div>
       <button class="btn-cta" id="btn-start">PLAY</button>
     </div>
-
+ 
     <!-- GAME OVER -->
     <div class="screen off" id="scr-go">
       <div class="go-title">GAME<br>OVER</div>
@@ -319,14 +319,14 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
       <div class="go-died" id="go-died"></div>
       <button class="btn-cta" id="btn-retry">RETRY</button>
     </div>
-
+ 
     <!-- GAME UI -->
     <div class="hdr">
       <div class="game-title">PANIC BUTTON</div>
       <div class="tagline">react · survive · panic harder</div>
     </div>
     <div class="hb-stripe" id="hb-stripe"></div>
-
+ 
     <div class="top-row">
       <span class="lives-lbl">Lives</span>
       <span class="life" id="lf0">❤️</span>
@@ -335,7 +335,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
       <div class="spacer"></div>
       <div class="diff-pill dp-easy" id="diff-pill">EASY</div>
     </div>
-
+ 
     <div class="score-row">
       <div class="sbox">
         <span class="slbl">Score</span>
@@ -347,13 +347,13 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
         <div class="sval" id="best-sval">0</div>
       </div>
     </div>
-
+ 
     <div class="streak-row">
       <span class="stk-lbl">Streak</span>
       <div class="stk-track"><div class="stk-fill" id="stk-fill" style="width:0%"></div></div>
       <span class="stk-val" id="stk-val">0</span>
     </div>
-
+ 
     <div class="inst-area">
       <div class="taunt"       id="taunt"></div>
       <div class="inst cr"     id="inst">GET READY</div>
@@ -368,7 +368,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
       <!-- Swipe direction arrow -->
       <div class="swipe-arrow" id="swipe-arrow"></div>
     </div>
-
+ 
     <div class="timer-wrap">
       <div class="timer-top">
         <span class="timer-lbl">Time</span>
@@ -376,23 +376,23 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
       </div>
       <div class="timer-track"><div class="timer-bar" id="tbar" style="width:100%"></div></div>
     </div>
-
+ 
     <div class="btn-zone" id="btn-zone">
       <button id="pb">PANIC!</button>
     </div>
-
+ 
     <div class="feedback" id="feedback"></div>
   </div>
 </div>
-
+ 
 <script>
 'use strict';
-
+ 
 // ══════════════════════════════════════
 //  DEVICE DETECTION
 // ══════════════════════════════════════
 const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-
+ 
 // ══════════════════════════════════════
 //  VIBRATION
 // ══════════════════════════════════════
@@ -401,7 +401,7 @@ function vibOK()      { vib(30); }
 function vibWrong()   { vib([60,30,120]); }
 function vibCombo()   { vib([20,20,40]); }
 function vibLastCh()  { vib([100,50,100,50,200]); }
-
+ 
 // ══════════════════════════════════════
 //  BACKGROUND CANVAS
 // ══════════════════════════════════════
@@ -409,10 +409,10 @@ const bgCvs=document.getElementById('bgcanvas'), bgCtx=bgCvs.getContext('2d');
 let BW,BH,bgIntensity=0;
 function resizeBG(){BW=bgCvs.width=innerWidth;BH=bgCvs.height=innerHeight;}
 resizeBG(); addEventListener('resize',resizeBG);
-
+ 
 const PCOLS=['#ff1133','#00eeff','#cc00ff','#2dff00','#ffe500','#ff5500'];
 const pts=Array.from({length:70},()=>({x:Math.random()*2000,y:Math.random()*2000,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,r:Math.random()*1.5+.4,col:PCOLS[Math.floor(Math.random()*PCOLS.length)],phase:Math.random()*Math.PI*2}));
-
+ 
 const EKG_LEN=80; const ekgPts=new Array(EKG_LEN).fill(0); let ekgPhase=0,ekgPanic=0;
 function drawBG(){
   requestAnimationFrame(drawBG);
@@ -436,7 +436,7 @@ function drawBG(){
   }
 }
 drawBG();
-
+ 
 // Corruption canvas
 const corCvs=document.getElementById('corrupt'),corCtx=corCvs.getContext('2d');
 let corruptLevel=0;
@@ -451,7 +451,7 @@ function drawCorrupt(){
   }
 }
 setInterval(drawCorrupt,80);
-
+ 
 // ══════════════════════════════════════
 //  AUDIO
 // ══════════════════════════════════════
@@ -459,7 +459,7 @@ let AC=null;
 function getAC(){if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();return AC;}
 function beep(f,t,d,v,delay=0){try{const ctx=getAC(),o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.type=t;o.frequency.setValueAtTime(f,ctx.currentTime+delay);g.gain.setValueAtTime(v,ctx.currentTime+delay);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+delay+d);o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+d+.02);}catch(e){}}
 function noise(d=.05,v=.2,delay=0){try{const ctx=getAC(),buf=ctx.createBuffer(1,ctx.sampleRate*d,ctx.sampleRate),data=buf.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*.9;const src=ctx.createBufferSource(),g=ctx.createGain();src.buffer=buf;src.connect(g);g.connect(ctx.destination);g.gain.setValueAtTime(v,ctx.currentTime+delay);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+delay+d);src.start(ctx.currentTime+delay);}catch(e){}}
-
+ 
 const S={
   ok:    ()=>{beep(480,'sine',.05,.14);beep(680,'sine',.07,.17,.06);beep(920,'sine',.09,.14,.12);},
   bonus: ()=>{beep(440,'sine',.04,.18);beep(550,'sine',.04,.2,.05);beep(660,'sine',.04,.2,.1);beep(880,'sine',.07,.22,.16);beep(1100,'sine',.1,.2,.24);noise(.04,.1,.28);},
@@ -476,7 +476,7 @@ const S={
   lastch:()=>{noise(.12,.4);beep(160,'sawtooth',.2,.4);beep(100,'sawtooth',.25,.35,.18);},
   sbr:   ()=>{noise(.15,.5);beep(100,'sawtooth',.2,.5);beep(60,'sawtooth',.3,.4,.15);},
 };
-
+ 
 let hbTO=null;
 function startHB(dur){
   stopHB();let e=0;
@@ -485,7 +485,7 @@ function startHB(dur){
   hbTO=setTimeout(beat,dur*.6);
 }
 function stopHB(){clearTimeout(hbTO);ekgPanic=0;}
-
+ 
 // ══════════════════════════════════════
 //  GAME DATA
 // ══════════════════════════════════════
@@ -493,7 +493,7 @@ const RANKS=[{min:0,t:'BEGINNER'},{min:5,t:'TWITCHY'},{min:12,t:'PANIC SURVIVOR'
 const TAUNTS_IDLE=['WAITING…','DO SOMETHING.','TICK TOCK…','HURRY UP.','ANYTIME NOW…','STILL ALIVE?','COME ON…'];
 const TAUNTS_HOT =['FASTER!!','DO IT NOW!!','YOUR HANDS!','FOCUS!!!','NOW NOW NOW','MOVE IT!!','LAST CHANCE'];
 const FAIL_MSGS  =["Too slow, chief.","Reflex.exe stopped.","Brain.dll not found.","Your neurons on holiday.","404: Reaction not found.","You had ONE job.","Grandma sends condolences.","ctrl+z your entire life.","You absolute disaster.","The button is crying.","Skills: not found.","Even a sloth said wow.","Panic achieved. Victory: no.","That was painful to watch.","Your hands have resigned.","Instructions were unclear?","Incredible. Incredibly bad."];
-
+ 
 // ── INSTRUCTION SETS (desktop vs mobile) ──
 const INSTS_DESKTOP=[
   {text:'CLICK NOW',       type:'click',       col:'cr',  hint:'click the button'},
@@ -518,7 +518,7 @@ const INSTS_DESKTOP=[
   {text:'FREEZE!',         type:'wait',         col:'cp',  hint:'stay still'},
   {text:'TRIPLE CLICK',    type:'tripleclick',  col:'co',  hint:'3 rapid clicks'},
 ];
-
+ 
 const INSTS_MOBILE=[
   {text:'TAP NOW!',         type:'click',        col:'cr',  hint:'tap the button'},
   {text:"DON'T TAP",        type:'wait',         col:'cy',  hint:'hands off!'},
@@ -541,12 +541,12 @@ const INSTS_MOBILE=[
   {text:'SWIPE LEFT',       type:'swipe_left',   col:'purple', col:'cp', hint:'swipe left'},
   {text:'SWIPE RIGHT',      type:'swipe_right',  col:'cy2', hint:'swipe right'},
 ];
-
+ 
 const FRENZY_DESKTOP=[{text:'CLICK!',type:'click',col:'cr'},{text:'WAIT!',type:'wait',col:'cy'},{text:'SPACE!',type:'space',col:'cy2'},{text:'SMASH!',type:'click',col:'cr'},{text:"DON'T!",type:'wait',col:'cp'},{text:'HIT!',type:'click',col:'cr'},{text:'STOP!',type:'wait',col:'cy'},{text:'GO!!',type:'click',col:'cr'}];
 const FRENZY_MOBILE =[{text:'TAP!',type:'click',col:'cr'},{text:'WAIT!',type:'wait',col:'cy'},{text:'HOLD!',type:'hold_btn',col:'co'},{text:'SMASH!',type:'click',col:'cr'},{text:"DON'T!",type:'wait',col:'cp'},{text:'HIT!',type:'click',col:'cr'},{text:'STOP!',type:'wait',col:'cy'},{text:'GO!!',type:'click',col:'cr'}];
-
+ 
 let INSTS, FRENZY_INSTS;
-
+ 
 const BTN_LBLS={
   click:       ['PANIC!','TAP ME!','HIT IT!','SMASH!','GO!','DO IT!','NOW!'],
   wait:        ["NO TOUCH","WAIT...","DON'T!","STOP!","RESIST!","FREEZE!","NOPE!"],
@@ -566,10 +566,10 @@ const BTN_LBLS={
   swipe_right: ['SWIPE →','RIGHT!','→'],
 };
 const BTN_COLS=['','blue','green','yellow','purple'];
-
+ 
 function getDiff(s){if(s>=35)return{name:'CHAOS',ms:520,cls:'dp-chaos'};if(s>=20)return{name:'HARD',ms:780,cls:'dp-hard'};if(s>=9)return{name:'MEDIUM',ms:1250,cls:'dp-medium'};return{name:'EASY',ms:1900,cls:'dp-easy'};}
 function getRank(s){let r=RANKS[0];for(const k of RANKS)if(s>=k.min)r=k;return r.t;}
-
+ 
 // ══════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════
@@ -586,7 +586,7 @@ let roundN=0,specialRound=null;
 let isFrenzy=false,frenzyCount=0,frenzyDone=0;
 let dblGuard=false,tripleCount=0,tripleTO=null;
 let nearMissShown=false,lastPctVal=1;
-
+ 
 // ══════════════════════════════════════
 //  DOM
 // ══════════════════════════════════════
@@ -604,7 +604,7 @@ const swipeArrow=g('swipe-arrow');
 const lifeEls=[0,1,2].map(i=>g('lf'+i));
 const goScore=g('go-score'),goBest=g('go-best'),goMsg=g('go-msg'),goRank=g('go-rank'),goDied=g('go-died'),goNB=g('go-nb'),hsNum=g('hs-num');
 function g(id){return document.getElementById(id);}
-
+ 
 // ══════════════════════════════════════
 //  TIPS (device-aware)
 // ══════════════════════════════════════
@@ -615,13 +615,13 @@ function fillTips(){
     :['CLICK IT','DON\'T CLICK','DOUBLE-CLICK','HOLD SPACE','PRESS ENTER','MOVE MOUSE','RIGHT-CLICK','STAY STILL'];
   grid.innerHTML=tips.map(t=>`<div class="tip">${t}</div>`).join('');
 }
-
+ 
 // ══════════════════════════════════════
 //  HELPERS
 // ══════════════════════════════════════
 const rand=a=>a[Math.floor(Math.random()*a.length)];
 const pick=(a,x)=>{const f=a.filter(i=>i!==x);return rand(f.length?f:a);};
-
+ 
 function updateScoreUI(){svalEl.textContent=score;bestSval.textContent=bestScore;rankLbl.textContent=getRank(score);svalEl.classList.add('pop');setTimeout(()=>svalEl.classList.remove('pop'),170);bgIntensity=Math.min(score/32,1);corruptLevel=Math.max(0,(score-25)/30);}
 function updateLives(){lifeEls.forEach((el,i)=>el.classList.toggle('lost',i>=lives));}
 function updateStreak(){const pct=Math.min(streak/STREAK_BONUS_AT,1)*100;stkFill.style.width=pct+'%';stkVal.textContent=streak;const hot=streak>=STREAK_BONUS_AT;stkFill.classList.toggle('hot',hot);stkVal.classList.toggle('hot',hot);}
@@ -636,23 +636,23 @@ function showNearMiss(){nearMissEl.textContent=rand(['⚡ NEAR MISS!','😬 CLOS
 function showGlitch(txt){glitchTxt.textContent=txt;glitchTxt.classList.remove('show');void glitchTxt.offsetWidth;glitchTxt.classList.add('show');setTimeout(()=>glitchTxt.classList.remove('show'),650);}
 function showLastChance(){lcTxt.textContent='LAST CHANCE';lcOv.classList.remove('show');void lcOv.offsetWidth;lcOv.classList.add('show');S.lastch();vibLastCh();setTimeout(()=>lcOv.classList.remove('show'),650);}
 function showSwipeArrow(dir){const arrows={swipe_up:'⬆',swipe_down:'⬇',swipe_left:'⬅',swipe_right:'➡'};swipeArrow.textContent=arrows[dir]||'';swipeArrow.className='swipe-arrow '+(dir.replace('swipe_',''));setTimeout(()=>swipeArrow.className='swipe-arrow',850);}
-
+ 
 function startTaunt(dur){
   clearTimeout(tauntTO);
   const hot=dur<900,pool=hot?TAUNTS_HOT:TAUNTS_IDLE;
   const at=dur*(.3+Math.random()*.3);
   tauntTO=setTimeout(()=>{if(roundEnded)return;const pct=1-(performance.now()-timerStart)/timerDur;if(pct<.1)return;tauntEl.textContent=rand(pool);tauntEl.classList.toggle('hot',hot);setTimeout(()=>{tauntEl.textContent='';tauntEl.classList.remove('hot');},dur*.35);},at);
 }
-
+ 
 function resetButton(){pb.style.position='';pb.style.left='';pb.style.top='';pb.className='';document.querySelectorAll('.decoy').forEach(d=>d.remove());cancelAnimationFrame(holdRAF);holdRingEl.classList.remove('show');hrFill.style.strokeDashoffset='113';}
-
+ 
 function setInst(inst,anim='appear'){
   if(anim==='leave'){instEl.classList.add('leaving');setTimeout(()=>{instEl.textContent=inst.text;instEl.className='inst '+inst.col+' appear';},150);}
   else{instEl.textContent=inst.text;instEl.className='inst '+inst.col+' '+anim;}
 }
-
+ 
 function clearAllTimers(){cancelAnimationFrame(timerRAF);clearTimeout(waitTO);clearTimeout(switchTO);clearTimeout(holdTO);clearTimeout(tauntTO);cancelAnimationFrame(holdRAF);stopHB();holdRingEl.classList.remove('show');}
-
+ 
 // ══════════════════════════════════════
 //  HOLD PROGRESS (for hold_btn + hold_space)
 // ══════════════════════════════════════
@@ -668,7 +668,7 @@ function startHoldProgress(){
   }
   holdRAF=requestAnimationFrame(tick);
 }
-
+ 
 // ══════════════════════════════════════
 //  TIMER
 // ══════════════════════════════════════
@@ -689,7 +689,7 @@ function startTimer(dur){
   }
   timerRAF=requestAnimationFrame(tick);
 }
-
+ 
 // ══════════════════════════════════════
 //  ROUND
 // ══════════════════════════════════════
@@ -698,42 +698,42 @@ function startRound(){
   resetButton();holdActive=false;holdDone=false;dblGuard=false;tripleCount=0;clearTimeout(tripleTO);roundN++;
   const diff=getDiff(score);
   diffPill.textContent=diff.name;diffPill.className='diff-pill '+diff.cls;
-
+ 
   // Frenzy every 10 rounds (score≥10)
   if(score>=10&&roundN%10===0){launchFrenzy(diff);return;}
-
+ 
   // Special every 7
   specialRound=(roundN>1&&roundN%7===0)?(Math.random()<.55?'bonus':'reverse'):null;
   if(specialRound==='bonus'){spBan.textContent='⚡ BONUS ROUND — ×3';spBan.className='sp-ban bonus on';setTimeout(()=>spBan.classList.remove('on'),2400);}
   else if(specialRound==='reverse'){spBan.textContent='🔄 REVERSE ROUND';spBan.className='sp-ban reverse on';setTimeout(()=>spBan.classList.remove('on'),2400);}
-
+ 
   // Silent round every 15 (score≥15)
   const isSilent=score>=15&&roundN%15===0;
-
+ 
   let inst=pick(INSTS,prevInst);prevInst=inst;
   if(specialRound==='reverse'){inst={...inst};if(inst.type==='click'){inst.type='wait';inst.text+=' (NOPE!)';inst.col='cy';}else if(inst.type==='wait'){inst.type='click';inst.text='ACTUALLY: '+(isMobile?'TAP IT!':'HIT IT!');inst.col='cr';}}
   curInst=inst;
-
+ 
   subInstEl.textContent=roundN<=8?(inst.hint||''):'';
-
+ 
   // Button label + distractor color
   const lblPool=BTN_LBLS[inst.type]||BTN_LBLS.click;
   pb.textContent=rand(lblPool);
   pb.className=(score>=3&&Math.random()<.32)?rand(BTN_COLS.filter(c=>c!=='')):'';
-
+ 
   // Tricks
   if(score>=12&&Math.random()<.22){if(Math.random()<.5)pb.classList.add('shrunken');else pb.classList.add('grown');}
   if(score>=18&&inst.type==='wait'&&Math.random()<.25)pb.classList.add('spinning');
   if(score>=10&&(inst.type==='click'||inst.type==='dblclick'||inst.type==='tripleclick')&&Math.random()<.3)doTeleport();
   if(score>=20&&inst.type==='click'&&Math.random()<.28)spawnDecoys(2);
   if(score>=30&&inst.type==='click'&&Math.random()<.22)spawnDecoys(1);
-
+ 
   // Mid-switch
   if(score>=5&&Math.random()<.28)scheduleSwitch(diff.ms);
-
+ 
   // Show swipe hint arrow
   if(['swipe_up','swipe_down','swipe_left','swipe_right'].includes(inst.type))showSwipeArrow(inst.type);
-
+ 
   if(isSilent){
     spBan.textContent='🤫 SILENT ROUND';spBan.className='sp-ban silent on';setTimeout(()=>spBan.classList.remove('on'),2000);
     instEl.textContent='';instEl.className='inst';
@@ -741,16 +741,16 @@ function startRound(){
   }else{
     setInst(inst);
   }
-
+ 
   const mult=calcMult();
   if(inst.type==='wait')waitTO=setTimeout(()=>{if(!roundEnded)doCorrect(null,mult);},diff.ms-100);
   startTimer(diff.ms);
 }
-
+ 
 function calcMult(){return(specialRound==='bonus'?3:1)+Math.floor(streak/STREAK_BONUS_AT);}
-
+ 
 function doTeleport(){S.tele();pb.classList.add('teleport-out');setTimeout(()=>{const z=btnZone.getBoundingClientRect(),m=14,bw=pb.offsetWidth||120,bh=pb.offsetHeight||120;const nx=m+Math.random()*Math.max(4,z.width-bw-m*2),ny=m+Math.random()*Math.max(4,z.height-bh-m*2);pb.style.position='absolute';pb.style.left=nx+'px';pb.style.top=ny+'px';pb.classList.remove('teleport-out');},100);}
-
+ 
 function spawnDecoys(count){
   for(let i=0;i<count;i++){
     const d=document.createElement('button');d.className='decoy';
@@ -764,7 +764,7 @@ function spawnDecoys(count){
     btnZone.appendChild(d);
   }
 }
-
+ 
 function scheduleSwitch(total){
   const at=total*(.32+Math.random()*.28);
   switchTO=setTimeout(()=>{
@@ -777,14 +777,14 @@ function scheduleSwitch(total){
     showGlitch(ni.text);S.tick();
   },at);
 }
-
+ 
 // ── FRENZY ──
 function launchFrenzy(diff){isFrenzy=true;frenzyCount=6+Math.floor(score/12)*2;frenzyDone=0;frRing.classList.add('on');spBan.textContent='⚠ FRENZY MODE ⚠';spBan.className='sp-ban frenzy on';doFlash('fr');S.frenzy();vib([30,20,30,20,60]);setTimeout(()=>runFrenzyRound(diff),350);}
 function runFrenzyRound(diff){if(!gameActive)return;if(frenzyDone>=frenzyCount){endFrenzy();return;}resetButton();holdActive=false;holdDone=false;dblGuard=false;mouseDist=0;roundEnded=false;const inst=rand(FRENZY_INSTS);curInst=inst;specialRound='frenzy';subInstEl.textContent='';pb.textContent=rand(BTN_LBLS[inst.type]||BTN_LBLS.click);pb.className=rand(BTN_COLS);setInst(inst);const ft=Math.max(320,diff.ms*.5);if(inst.type==='wait')waitTO=setTimeout(()=>{if(!roundEnded)frenzyOK();},ft-80);startTimer(ft);}
 function frenzyOK(){if(roundEnded)return;roundEnded=true;clearAllTimers();S.ok();vibOK();const earned=1+Math.floor(streak/STREAK_BONUS_AT);score+=earned;if(score>bestScore)bestScore=score;localStorage.setItem('pb_best',bestScore);streak++;updateScoreUI();updateStreak();doFlash('fg');frenzyDone++;showFB('✓','ok');setTimeout(()=>runFrenzyRound(getDiff(score)),110);}
 function frenzyWrong(){if(roundEnded)return;roundEnded=true;clearAllTimers();endFrenzy();loseLife();}
 function endFrenzy(){isFrenzy=false;frRing.classList.remove('on');spBan.classList.remove('on');spBan.textContent='';if(!gameActive)return;setTimeout(startRound,400);}
-
+ 
 // ══════════════════════════════════════
 //  CORRECT / WRONG / TIMEOUT
 // ══════════════════════════════════════
@@ -802,7 +802,7 @@ function doCorrect(ev,multOverride){
   if(ev)floatPts('+'+earned,ev.clientX,ev.clientY);
   setTimeout(startRound,230);
 }
-
+ 
 function loseLife(){
   if(lives===1)showLastChance();
   lives--;updateLives();S.life();vibWrong();doShake();doFlash('fr');
@@ -813,7 +813,7 @@ function loseLife(){
 }
 function handleWrong(){if(roundEnded)return;if(isFrenzy){frenzyWrong();return;}roundEnded=true;clearAllTimers();loseLife();}
 function handleTimeout(){if(roundEnded)return;if(curInst&&curInst.type==='wait')doCorrect(null);else{roundEnded=true;clearAllTimers();loseLife();}}
-
+ 
 // ══════════════════════════════════════
 //  INPUT: TRIPLE CLICK/TAP
 // ══════════════════════════════════════
@@ -822,7 +822,7 @@ function handleTriple(ev){
   if(tripleCount>=3){tripleCount=0;if(!gameActive||roundEnded||!curInst)return;if(curInst.type==='tripleclick')doCorrect(ev);else handleWrong();return;}
   tripleTO=setTimeout(()=>{tripleCount=0;},450);
 }
-
+ 
 // ══════════════════════════════════════
 //  INPUT: MOUSE (desktop)
 // ══════════════════════════════════════
@@ -845,11 +845,11 @@ function handleKeyDown(e){
 }
 function handleKeyUp(e){if(e.code==='Space'&&holdActive){holdActive=false;clearTimeout(holdTO);cancelAnimationFrame(holdRAF);holdRingEl.classList.remove('show');if(!holdDone&&!roundEnded&&gameActive&&curInst&&(curInst.type==='hold_space'))handleWrong();}}
 function handleMouseMove(e){if(!gameActive||roundEnded||!curInst)return;const dx=e.clientX-lastMX,dy=e.clientY-lastMY,d=Math.sqrt(dx*dx+dy*dy);mouseDist+=d;lastMX=e.clientX;lastMY=e.clientY;if(curInst.type==='move'&&mouseDist>90&&!roundEnded){doCorrect(e);return;}if(curInst.type==='wait'&&mouseDist>120&&!roundEnded)handleWrong();}
-
+ 
 // ══════════════════════════════════════
 //  INPUT: TOUCH (mobile)
 // ══════════════════════════════════════
-
+ 
 // Touch on the button itself
 pb.addEventListener('touchstart',(e)=>{
   if(!gameActive||roundEnded||!curInst)return;
@@ -862,7 +862,7 @@ pb.addEventListener('touchstart',(e)=>{
     }
   }
 },{passive:false});
-
+ 
 pb.addEventListener('touchend',(e)=>{
   if(!gameActive||roundEnded||!curInst)return;
   e.preventDefault();e.stopPropagation();
@@ -885,7 +885,7 @@ pb.addEventListener('touchend',(e)=>{
   if(t==='click')doCorrect(e.changedTouches[0]||e);
   else handleWrong();
 },{passive:false});
-
+ 
 // Double-tap detection (fires after two touchend events)
 let lastTapTime=0;
 pb.addEventListener('touchend',(e)=>{
@@ -898,13 +898,13 @@ pb.addEventListener('touchend',(e)=>{
     lastTapTime=now;
   }
 },{passive:false,capture:true});
-
+ 
 // Swipe detection — on the full cab
 cab.addEventListener('touchstart',(e)=>{
   if(!gameActive||roundEnded)return;
   const t=e.touches[0];touchStartX=t.clientX;touchStartY=t.clientY;touchMoved=false;swipeHandled=false;
 },{passive:true});
-
+ 
 cab.addEventListener('touchmove',(e)=>{
   if(!gameActive||roundEnded||!curInst)return;
   const t=e.touches[0];
@@ -914,7 +914,7 @@ cab.addEventListener('touchmove',(e)=>{
   // Stay-still violation
   if(curInst.type==='wait'&&dist>80&&!roundEnded)handleWrong();
 },{passive:true});
-
+ 
 cab.addEventListener('touchend',(e)=>{
   if(!gameActive||roundEnded||!curInst||swipeHandled)return;
   if(!touchMoved)return; // not a swipe — handled by button touchend
@@ -931,7 +931,7 @@ cab.addEventListener('touchend',(e)=>{
   // swipe on non-swipe round = wait violation
   else if(curInst.type==='wait')handleWrong();
 },{passive:true});
-
+ 
 // Outside tap trap for wait on mobile
 document.addEventListener('touchend',(e)=>{
   if(!gameActive||roundEnded||!curInst)return;
@@ -939,7 +939,7 @@ document.addEventListener('touchend',(e)=>{
   if(scrStart.contains(e.target)||scrGO.contains(e.target))return;
   if(curInst.type==='wait')handleWrong();
 },{passive:true});
-
+ 
 // Desktop outside-click trap for wait
 document.addEventListener('click',(e)=>{
   if(!gameActive||roundEnded||!curInst)return;
@@ -947,7 +947,7 @@ document.addEventListener('click',(e)=>{
   if(scrStart.contains(e.target)||scrGO.contains(e.target))return;
   if(curInst.type==='wait')handleWrong();
 },true);
-
+ 
 // ══════════════════════════════════════
 //  GAME OVER
 // ══════════════════════════════════════
@@ -961,7 +961,7 @@ function gameOver(){
   goNB.className=isNew?'new-best-badge':'new-best-badge hidden';
   scrGO.classList.remove('off');
 }
-
+ 
 // ══════════════════════════════════════
 //  START
 // ══════════════════════════════════════
@@ -976,14 +976,14 @@ function startGame(){
   tbarEl.style.width='100%';tbarEl.className='timer-bar';frRing.classList.remove('on');chromaOff();tauntEl.textContent='';
   startRound();
 }
-
+ 
 // ══════════════════════════════════════
 //  EVENTS
 // ══════════════════════════════════════
 btnStart.addEventListener('click',startGame);btnRetry.addEventListener('click',startGame);
 btnStart.addEventListener('touchend',(e)=>{e.preventDefault();startGame();},{passive:false});
 btnRetry.addEventListener('touchend',(e)=>{e.preventDefault();startGame();},{passive:false});
-
+ 
 pb.addEventListener('click',handleClick);
 pb.addEventListener('dblclick',handleDblClick);
 pb.addEventListener('contextmenu',handleRightClick);
@@ -991,10 +991,10 @@ document.addEventListener('keydown',handleKeyDown);
 document.addEventListener('keyup',handleKeyUp);
 document.addEventListener('mousemove',handleMouseMove);
 document.addEventListener('contextmenu',(e)=>{if(gameActive)e.preventDefault();});
-
+ 
 // Prevent default scroll/zoom on mobile during gameplay
 document.addEventListener('touchmove',(e)=>{if(gameActive)e.preventDefault();},{passive:false});
-
+ 
 // ══════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════
