@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════
-   PANIC BUTTON — style.css
+   PANIC BUTTON — style.css (improved)
    ══════════════════════════════════════ */
 
 /* ── CSS VARIABLES ── */
@@ -130,6 +130,45 @@ body::after {
 }
 
 /* ══════════════════════════════════════
+   PAUSE OVERLAY
+   ══════════════════════════════════════ */
+.pause-ov {
+  position: absolute;
+  inset: 0;
+  background: rgba(8,8,15,.88);
+  z-index: 300;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: inherit;
+  backdrop-filter: blur(4px);
+}
+
+.pause-ov.show { display: flex; }
+
+.pause-icon {
+  font-size: 48px;
+  opacity: .6;
+}
+
+.pause-txt {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(32px, 9vw, 44px);
+  letter-spacing: 6px;
+  color: var(--cyan);
+  text-shadow: 0 0 20px #00eeff;
+}
+
+.pause-sub {
+  font-size: clamp(8px, 2.2vw, 10px);
+  letter-spacing: 3px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+/* ══════════════════════════════════════
    HEADER
    ══════════════════════════════════════ */
 .hdr {
@@ -210,7 +249,22 @@ body::after {
   font-size: clamp(14px, 4vw, 18px);
   transition: transform .2s, opacity .3s;
   display: inline-block;
+  position: relative;
 }
+
+/* Shape-mode life indicator */
+.cb-mode .life::after {
+  content: '♥';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(13px, 3.5vw, 17px);
+  color: var(--red);
+}
+
+.cb-mode .life { font-size: 0; }
 
 .life.lost {
   opacity: .15;
@@ -227,6 +281,26 @@ body::after {
 }
 
 .spacer { flex: 1; }
+
+/* Color-blind mini button */
+.cb-mini {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  font-size: clamp(10px, 2.5vw, 12px);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .2s, border-color .2s;
+  flex-shrink: 0;
+}
+
+.cb-mini:active { color: var(--cyan); border-color: var(--cyan); }
+.cb-mode .cb-mini { color: var(--cyan); border-color: var(--cyan); }
 
 .diff-pill {
   font-size: clamp(7px, 2vw, 9px);
@@ -252,12 +326,12 @@ body::after {
 }
 
 /* ══════════════════════════════════════
-   SCORES
+   SCORES (now 3 boxes)
    ══════════════════════════════════════ */
 .score-row {
   display: flex;
-  gap: 8px;
-  padding: clamp(6px,2vw,9px) 16px 0;
+  gap: 6px;
+  padding: clamp(5px,1.5vw,8px) 16px 0;
   width: 100%;
   flex-shrink: 0;
 }
@@ -267,11 +341,13 @@ body::after {
   background: #05050d;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: clamp(6px,2vw,8px) 10px;
+  padding: clamp(5px,1.5vw,7px) 8px;
   text-align: center;
   position: relative;
   overflow: hidden;
 }
+
+.sbox-react { flex: 0 0 auto; min-width: 72px; }
 
 .sbox::before {
   content: '';
@@ -282,8 +358,8 @@ body::after {
 }
 
 .slbl {
-  font-size: clamp(7px, 2vw, 9px);
-  letter-spacing: 2px;
+  font-size: clamp(6px, 1.8vw, 8px);
+  letter-spacing: 1.5px;
   color: var(--dim);
   text-transform: uppercase;
   display: block;
@@ -292,11 +368,17 @@ body::after {
 
 .sval {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(30px, 9vw, 40px);
+  font-size: clamp(28px, 8vw, 38px);
   line-height: 1;
   color: var(--yellow);
   text-shadow: 0 0 10px #ffe500, 0 0 28px #ffe50077;
   transition: transform .1s;
+}
+
+.sval-sm {
+  font-size: clamp(16px, 4.5vw, 20px);
+  color: var(--cyan);
+  text-shadow: 0 0 8px #00eeff;
 }
 
 .sval.pop {
@@ -306,7 +388,7 @@ body::after {
 }
 
 .rank-lbl {
-  font-size: clamp(7px, 2vw, 9px);
+  font-size: clamp(6px, 1.8vw, 8px);
   letter-spacing: 1px;
   margin-top: 1px;
   color: var(--cyan);
@@ -320,7 +402,7 @@ body::after {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: clamp(5px,1.5vw,8px) 16px 0;
+  padding: clamp(4px,1.2vw,6px) 16px 0;
   width: 100%;
   flex-shrink: 0;
 }
@@ -384,18 +466,17 @@ body::after {
   justify-content: center;
   width: 100%;
   position: relative;
-  padding: 8px 12px;
+  padding: 6px 12px;
   min-height: 0;
 }
 
-/* Taunt line */
 .taunt {
   font-size: clamp(8px, 2.5vw, 10px);
   letter-spacing: 3px;
   color: var(--dim);
   text-transform: uppercase;
-  margin-bottom: 5px;
-  min-height: 13px;
+  margin-bottom: 4px;
+  min-height: 12px;
   transition: color .2s;
 }
 
@@ -410,15 +491,31 @@ body::after {
   to   { opacity: .5; }
 }
 
-/* Main instruction text */
 .inst {
   font-family: 'Black Han Sans', sans-serif;
-  font-size: clamp(28px, 9vw, 54px);
+  font-size: clamp(26px, 8.5vw, 52px);
   text-align: center;
   line-height: 1.0;
   letter-spacing: 2px;
   padding: 0 4px;
   will-change: transform;
+}
+
+/* ── SHAPE INDICATOR (color-blind mode) ── */
+.shape-ind {
+  display: none;
+  font-size: clamp(28px, 8vw, 40px);
+  margin-top: 4px;
+  line-height: 1;
+  animation: shape-pop .2s ease-out;
+}
+
+.cb-mode .shape-ind { display: block; }
+
+@keyframes shape-pop {
+  0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+  60%  { transform: scale(1.2) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
 }
 
 /* Instruction colour classes */
@@ -429,7 +526,6 @@ body::after {
 .cp  { color: var(--purple); text-shadow: 0 0 14px #cc00ff, 0 0 40px #cc00ff66; }
 .co  { color: var(--orange); text-shadow: 0 0 14px #ff5500, 0 0 40px #ff550066; }
 
-/* Instruction animations */
 @keyframes inst-slam {
   0%   { opacity: 0; transform: scale(.3) rotate(-8deg); }
   55%  { opacity: 1; transform: scale(1.12) rotate(2deg); }
@@ -455,20 +551,18 @@ body::after {
 .inst.leaving { animation: inst-out  .15s ease-in forwards; }
 .inst.jitter  { animation: inst-jitter .12s ease-in-out infinite; }
 
-/* Sub-instruction hint */
 .sub-inst {
   font-size: clamp(9px, 2.5vw, 11px);
   letter-spacing: 2px;
   color: var(--dim);
-  margin-top: 5px;
+  margin-top: 4px;
   text-transform: uppercase;
-  min-height: 13px;
+  min-height: 12px;
 }
 
-/* Hold-progress ring */
 .hold-ring {
   position: absolute;
-  bottom: 8px;
+  bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
   opacity: 0;
@@ -500,7 +594,6 @@ body::after {
   transition: stroke-dashoffset .05s linear;
 }
 
-/* Glitch overlay text */
 .glitch-txt {
   position: absolute;
   top: 50%;
@@ -524,7 +617,6 @@ body::after {
 
 .glitch-txt.show { animation: glitch-show .6s ease-out forwards; }
 
-/* Near-miss label */
 .near-miss-el {
   position: absolute;
   top: 5px;
@@ -562,7 +654,7 @@ body::after {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .timer-lbl {
@@ -590,6 +682,23 @@ body::after {
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
+  position: relative;
+}
+
+/* Shape-mode pattern overlay on timer */
+.cb-mode .timer-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent 8px,
+    rgba(255,255,255,.06) 8px,
+    rgba(255,255,255,.06) 9px
+  );
+  pointer-events: none;
+  z-index: 2;
 }
 
 .timer-bar {
@@ -598,6 +707,21 @@ body::after {
   transition: background .2s;
   background: var(--green);
   box-shadow: 0 0 10px var(--green);
+  position: relative;
+}
+
+/* Shape-mode: hatching on timer bar */
+.cb-mode .timer-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0,
+    transparent 3px,
+    rgba(0,0,0,.2) 3px,
+    rgba(0,0,0,.2) 4px
+  );
 }
 
 .timer-bar.warn   { background: var(--yellow); box-shadow: 0 0 10px var(--yellow); }
@@ -618,22 +742,21 @@ body::after {
 .btn-zone {
   position: relative;
   width: 100%;
-  flex: 0 0 clamp(130px, 35vw, 160px);
+  flex: 0 0 clamp(120px, 32vw, 150px);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: clamp(4px,1.5vw,8px) 0 clamp(3px,1vw,6px);
+  margin: clamp(4px,1.2vw,7px) 0 clamp(2px,0.8vw,5px);
 }
 
-/* Main panic button */
 #pb {
-  width:  clamp(110px, 28vw, 134px);
-  height: clamp(110px, 28vw, 134px);
+  width:  clamp(108px, 27vw, 130px);
+  height: clamp(108px, 27vw, 130px);
   border-radius: 50%;
   border: none;
   cursor: pointer;
   font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(17px, 4.5vw, 21px);
+  font-size: clamp(16px, 4.2vw, 20px);
   letter-spacing: 2px;
   outline: none;
   position: absolute;
@@ -669,6 +792,12 @@ body::after {
   pointer-events: none;
 }
 
+/* Shape-mode: border pattern on button */
+.cb-mode #pb {
+  outline: 4px solid rgba(255,255,255,.3);
+  outline-offset: 2px;
+}
+
 #pb:active,
 #pb.pressed {
   transform: translateY(7px) scale(.97) !important;
@@ -678,13 +807,17 @@ body::after {
     inset 0 3px 6px rgba(0,0,0,.35) !important;
 }
 
-/* Button colour variants */
-#pb.blue   { background: radial-gradient(circle at 36% 30%, #66bbff, #0044cc); box-shadow: 0 8px 0 #002299, 0 12px 28px rgba(0,80,255,.55),   inset 0 1px 0 rgba(255,255,255,.32); }
-#pb.green  { background: radial-gradient(circle at 36% 30%, #66ff99, #009933); color: #001800; box-shadow: 0 8px 0 #005511, 0 12px 28px rgba(0,180,50,.55),  inset 0 1px 0 rgba(255,255,255,.32); }
+#pb.blue   { background: radial-gradient(circle at 36% 30%, #66bbff, #0044cc); box-shadow: 0 8px 0 #002299, 0 12px 28px rgba(0,80,255,.55), inset 0 1px 0 rgba(255,255,255,.32); }
+#pb.green  { background: radial-gradient(circle at 36% 30%, #66ff99, #009933); color: #001800; box-shadow: 0 8px 0 #005511, 0 12px 28px rgba(0,180,50,.55), inset 0 1px 0 rgba(255,255,255,.32); }
 #pb.yellow { background: radial-gradient(circle at 36% 30%, #ffee66, #bb8800); color: #110900; box-shadow: 0 8px 0 #775500, 0 12px 28px rgba(180,140,0,.55), inset 0 1px 0 rgba(255,255,255,.32); }
-#pb.purple { background: radial-gradient(circle at 36% 30%, #ee66ff, #880099); box-shadow: 0 8px 0 #440055, 0 12px 28px rgba(160,0,220,.55),  inset 0 1px 0 rgba(255,255,255,.32); }
+#pb.purple { background: radial-gradient(circle at 36% 30%, #ee66ff, #880099); box-shadow: 0 8px 0 #440055, 0 12px 28px rgba(160,0,220,.55), inset 0 1px 0 rgba(255,255,255,.32); }
 
-/* Size / behaviour modifiers */
+/* Shape-mode extra outline per color */
+.cb-mode #pb.blue   { outline-color: rgba(102,187,255,.6); }
+.cb-mode #pb.green  { outline-color: rgba(102,255,153,.6); }
+.cb-mode #pb.yellow { outline-color: rgba(255,238,102,.6); }
+.cb-mode #pb.purple { outline-color: rgba(238,102,255,.6); }
+
 #pb.shrunken { width: 72px  !important; height: 72px  !important; font-size: 12px !important; }
 #pb.grown    {
   width:  clamp(140px, 38vw, 162px) !important;
@@ -706,7 +839,6 @@ body::after {
   to   { box-shadow: 0 8px 0 #88000e, 0 12px 55px rgba(255,17,51,1), 0 0 38px rgba(255,17,51,.6), inset 0 1px 0 rgba(255,255,255,.32); }
 }
 
-/* Decoy buttons */
 .decoy {
   width: 68px;
   height: 68px;
@@ -728,6 +860,17 @@ body::after {
   -webkit-touch-callout: none;
 }
 
+/* Shape-mode: decoys get X pattern */
+.cb-mode .decoy::before {
+  content: '✕';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  color: rgba(255,255,255,.5);
+  pointer-events: none;
+}
+
 .decoy:active { transform: translateY(3px) !important; }
 
 @keyframes decoy-in {
@@ -735,10 +878,9 @@ body::after {
   to   { transform: scale(1); opacity: 1; }
 }
 
-/* Combo label */
 .combo-lbl {
   position: absolute;
-  bottom: 3px;
+  bottom: 2px;
   left: 50%;
   transform: translateX(-50%);
   font-family: 'Bebas Neue', sans-serif;
@@ -778,7 +920,6 @@ body::after {
 .flash-ov.fb { background: rgba(0,200,255,.18);  opacity: 1; }
 .flash-ov.fw { background: rgba(255,255,255,.15);opacity: 1; }
 
-/* Frenzy ring */
 .frenzy-ring {
   position: absolute;
   inset: -3px;
@@ -799,7 +940,6 @@ body::after {
   to   { box-shadow: 0 0 35px #ff1133, 0 0 60px #ff113355, inset 0 0 20px #ff113333; }
 }
 
-/* Special round banner */
 .sp-ban {
   position: absolute;
   top: 62px;
@@ -833,7 +973,6 @@ body::after {
 
 .sp-ban.on { opacity: 1; }
 
-/* Floating points */
 .pts-float {
   position: absolute;
   font-family: 'Bebas Neue', sans-serif;
@@ -855,7 +994,6 @@ body::after {
 
 .pts-float.pop { animation: pf .8s ease-out forwards; }
 
-/* Big multiplier pop */
 .big-mult {
   position: absolute;
   top: 38%;
@@ -884,7 +1022,7 @@ body::after {
    FEEDBACK BAR
    ══════════════════════════════════════ */
 .feedback {
-  height: 20px;
+  height: 18px;
   font-size: clamp(10px, 3vw, 12px);
   letter-spacing: 3px;
   text-align: center;
@@ -892,12 +1030,21 @@ body::after {
   opacity: 0;
   transition: opacity .2s;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 
 .feedback.show  { opacity: 1; }
 .feedback.ok    { color: var(--green);  text-shadow: 0 0 8px #2dff00; }
 .feedback.bad   { color: var(--red);    text-shadow: 0 0 8px #ff1133; }
 .feedback.bonus { color: var(--yellow); text-shadow: 0 0 8px #ffe500; }
+
+/* Shape mode feedback icons */
+.feedback .fb-shape { display: none; }
+.cb-mode .feedback .fb-shape { display: inline; }
+.cb-mode .feedback .fb-text { display: none; }
 
 /* ══════════════════════════════════════
    LAST CHANCE OVERLAY
@@ -955,9 +1102,9 @@ body::after {
   align-items: center;
   justify-content: center;
   z-index: 250;
-  padding: clamp(20px,5vw,30px) clamp(16px,5vw,28px);
+  padding: clamp(16px,4vw,24px) clamp(16px,5vw,28px);
   text-align: center;
-  gap: clamp(8px,2.5vw,12px);
+  gap: clamp(7px,2vw,11px);
   overflow-y: auto;
 }
 
@@ -981,15 +1128,14 @@ body::after {
   max-width: 300px;
 }
 
-/* Tips grid */
 .tips-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px 14px;
+  gap: 3px 12px;
 }
 
 .tip {
-  font-size: clamp(7px, 2vw, 9px);
+  font-size: clamp(8px, 2.2vw, 10px);
   letter-spacing: 1px;
   color: var(--dim);
   text-transform: uppercase;
@@ -1000,7 +1146,6 @@ body::after {
 
 .tip::before { content: '▸'; color: var(--cyan); }
 
-/* High-score panel */
 .hs-panel {
   background: #04040c;
   border: 1px solid var(--border);
@@ -1025,7 +1170,43 @@ body::after {
   line-height: 1;
 }
 
-/* CTA button */
+/* Color-blind toggle on start screen */
+.cb-toggle-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cb-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(8px, 2.2vw, 10px);
+  letter-spacing: 2px;
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-transform: uppercase;
+  transition: all .2s;
+}
+
+.cb-toggle:active {
+  background: rgba(0,238,255,.08);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.cb-toggle.on {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.cb-icon { font-size: 14px; }
+
 .btn-cta {
   background: none;
   border: 2px solid var(--cyan);
@@ -1065,7 +1246,7 @@ body::after {
 
 .go-msg {
   font-family: 'Black Han Sans', sans-serif;
-  font-size: clamp(13px, 4vw, 20px);
+  font-size: clamp(12px, 3.5vw, 18px);
   color: var(--yellow);
   text-shadow: 0 0 8px #ffe500;
   letter-spacing: 2px;
@@ -1073,21 +1254,21 @@ body::after {
 
 .go-scrs {
   display: flex;
-  gap: 12px;
-  margin: 3px 0;
+  gap: 8px;
+  margin: 2px 0;
 }
 
 .go-sbox {
   background: #04040c;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 14px;
-  min-width: 85px;
+  padding: 7px 12px;
+  min-width: 75px;
 }
 
 .go-slbl {
   font-size: clamp(7px, 2vw, 9px);
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   color: var(--dim);
   display: block;
   margin-bottom: 2px;
@@ -1096,10 +1277,16 @@ body::after {
 
 .go-sval {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(36px, 10vw, 44px);
+  font-size: clamp(32px, 9vw, 40px);
   line-height: 1;
   color: var(--cyan);
   text-shadow: 0 0 12px #00eeff;
+}
+
+.go-sval-sm {
+  font-size: clamp(18px, 5vw, 24px);
+  color: var(--purple);
+  text-shadow: 0 0 10px #cc00ff;
 }
 
 .go-rank {
@@ -1111,7 +1298,7 @@ body::after {
 }
 
 .go-died {
-  font-size: clamp(8px, 2.2vw, 9px);
+  font-size: clamp(7px, 2vw, 9px);
   letter-spacing: 2px;
   color: var(--dim);
 }
@@ -1128,6 +1315,64 @@ body::after {
   0%   { opacity: 0; transform: scale(.3); }
   60%  { transform: scale(1.25); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+/* Reaction time breakdown */
+.react-breakdown {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 300px;
+  min-height: 14px;
+}
+
+.rt-pill {
+  font-size: clamp(7px, 1.8vw, 9px);
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: #0a0a18;
+  border: 1px solid var(--border);
+  color: var(--dim);
+}
+
+.rt-pill.fast { border-color: #2dff0044; color: var(--green); }
+.rt-pill.mid  { border-color: #ffe50044; color: var(--yellow); }
+.rt-pill.slow { border-color: #ff113344; color: var(--red); }
+
+/* Copy result button */
+.btn-copy {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(9px, 2.5vw, 11px);
+  letter-spacing: 3px;
+  padding: 7px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-copy:active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0,238,255,.06);
+}
+
+.btn-copy.copied {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(45,255,0,.06);
+}
+
+.go-btns {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 /* ══════════════════════════════════════
