@@ -34,6 +34,13 @@
         <div class="lc-txt" id="lc-txt"></div>
       </div>
 
+      <!-- Pause overlay -->
+      <div class="pause-ov" id="pause-ov">
+        <div class="pause-icon">⏸</div>
+        <div class="pause-txt">PAUSED</div>
+        <div class="pause-sub">Tab back to resume</div>
+      </div>
+
       <!-- ── START SCREEN ── -->
       <div class="screen" id="scr-start">
         <div class="s-logo">PANIC<br>BUTTON</div>
@@ -42,6 +49,13 @@
         <div class="hs-panel">
           <span class="hs-lbl">Best Score</span>
           <div class="hs-num" id="hs-num">0</div>
+        </div>
+        <!-- Color-blind toggle on start -->
+        <div class="cb-toggle-wrap">
+          <button class="cb-toggle" id="cb-toggle-start" onclick="toggleCB()">
+            <span class="cb-icon" id="cb-icon-start">◐</span>
+            <span id="cb-label-start">Shape Mode: OFF</span>
+          </button>
         </div>
         <button class="btn-cta" id="btn-start">PLAY</button>
       </div>
@@ -59,11 +73,26 @@
             <span class="go-slbl">Best</span>
             <div class="go-sval" id="go-best">0</div>
           </div>
+          <div class="go-sbox">
+            <span class="go-slbl">Avg React</span>
+            <div class="go-sval go-sval-sm" id="go-react">—</div>
+          </div>
         </div>
         <div class="new-best-badge hidden" id="go-nb">★ NEW BEST ★</div>
         <div class="go-rank" id="go-rank">BEGINNER</div>
         <div class="go-died" id="go-died"></div>
-        <button class="btn-cta" id="btn-retry">RETRY</button>
+
+        <!-- Reaction time breakdown -->
+        <div class="react-breakdown" id="react-breakdown"></div>
+
+        <!-- Copy result button -->
+        <button class="btn-copy" id="btn-copy" onclick="copyResult()">
+          <span id="copy-icon">📋</span> COPY RESULT
+        </button>
+
+        <div class="go-btns">
+          <button class="btn-cta" id="btn-retry">RETRY</button>
+        </div>
       </div>
 
       <!-- ── GAME UI ── -->
@@ -75,12 +104,13 @@
 
       <div class="top-row">
         <span class="lives-lbl">Lives</span>
+        <!-- FIXED: exactly 3 hearts with unique IDs -->
         <span class="life" id="lf0">❤️</span>
         <span class="life" id="lf1">❤️</span>
         <span class="life" id="lf2">❤️</span>
-         <span class="life" id="lf2">❤️</span>
-         <span class="life" id="lf2">❤️</span>
         <div class="spacer"></div>
+        <!-- Color-blind indicator -->
+        <button class="cb-mini" id="cb-mini" onclick="toggleCB()" title="Shape Mode">◑</button>
         <div class="diff-pill dp-easy" id="diff-pill">EASY</div>
       </div>
 
@@ -93,6 +123,10 @@
         <div class="sbox">
           <span class="slbl">Best</span>
           <div class="sval" id="best-sval">0</div>
+        </div>
+        <div class="sbox sbox-react">
+          <span class="slbl">Avg React</span>
+          <div class="sval sval-sm" id="react-sval">—</div>
         </div>
       </div>
 
@@ -107,6 +141,8 @@
       <div class="inst-area">
         <div class="taunt"        id="taunt"></div>
         <div class="inst cr"      id="inst">GET READY</div>
+        <!-- Shape indicator for color-blind mode -->
+        <div class="shape-ind"    id="shape-ind"></div>
         <div class="sub-inst"     id="sub-inst"></div>
         <div class="glitch-txt"   id="glitch-txt"></div>
         <div class="near-miss-el" id="near-miss"></div>
