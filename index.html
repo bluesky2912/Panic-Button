@@ -34,12 +34,6 @@
         <div class="lc-txt" id="lc-txt"></div>
       </div>
 
-      <!-- COUNTDOWN OVERLAY (new) -->
-      <div class="countdown-ov" id="countdown-ov">
-        <div class="cd-num" id="cd-num"></div>
-        <div class="cd-sub" id="cd-sub">GET READY</div>
-      </div>
-
       <!-- Pause overlay -->
       <div class="pause-ov" id="pause-ov">
         <div class="pause-icon">⏸</div>
@@ -51,15 +45,17 @@
       <div class="screen" id="scr-start">
         <div class="s-logo">PANIC<br>BUTTON</div>
         <div class="s-sub">React. Survive. Repeat.<br>3 lives. No mercy.</div>
+        <!-- Last game taunt -->
+        <div class="start-taunt" id="start-taunt"></div>
         <div class="tips-grid" id="tips-grid"></div>
         <div class="hs-panel">
           <span class="hs-lbl">Best Score</span>
           <div class="hs-num" id="hs-num">0</div>
+          <div class="hs-date" id="hs-date"></div>
         </div>
-        <!-- All-time stats on start screen -->
-        <div class="alltime-row" id="alltime-row"></div>
-        <!-- Color-blind toggle on start -->
+        <!-- Sound toggle on start -->
         <div class="cb-toggle-wrap">
+          <button class="mute-btn mute-btn-lg" onclick="toggleMute()">🔊</button>
           <button class="cb-toggle" id="cb-toggle-start" onclick="toggleCB()">
             <span class="cb-icon" id="cb-icon-start">◐</span>
             <span id="cb-label-start">Shape Mode: OFF</span>
@@ -90,28 +86,7 @@
         <div class="go-rank" id="go-rank">BEGINNER</div>
         <div class="go-died" id="go-died"></div>
 
-        <!-- ── STATS SCREEN (new) ── -->
-        <div class="stats-block" id="stats-block">
-          <!-- Hit/miss ratio bar -->
-          <div class="stat-ratio-wrap">
-            <div class="stat-ratio-bar" id="stat-ratio-bar"></div>
-            <div class="stat-ratio-labels" id="stat-ratio-labels"></div>
-          </div>
-          <!-- Fast / Slow badges -->
-          <div class="stat-badges" id="stat-badges"></div>
-          <!-- Accuracy pill -->
-          <div class="stat-acc-row" id="stat-acc-row"></div>
-          <!-- Mini reaction time bar chart -->
-          <div class="rt-chart-wrap">
-            <div class="rt-chart-lbl">Reaction times this run</div>
-            <canvas id="rt-chart" height="60"></canvas>
-            <div class="rt-chart-axis" id="rt-chart-axis"></div>
-          </div>
-          <!-- All-time stats -->
-          <div class="alltime-stats" id="alltime-stats"></div>
-        </div>
-
-        <!-- Reaction time breakdown pills -->
+        <!-- Reaction time breakdown -->
         <div class="react-breakdown" id="react-breakdown"></div>
 
         <!-- Copy result button -->
@@ -133,12 +108,14 @@
 
       <div class="top-row">
         <span class="lives-lbl">Lives</span>
+        <!-- FIXED: exactly 3 hearts with unique IDs -->
         <span class="life" id="lf0">❤️</span>
         <span class="life" id="lf1">❤️</span>
         <span class="life" id="lf2">❤️</span>
         <div class="spacer"></div>
-        <!-- Accuracy pill (new) -->
-        <div class="acc-pill" id="acc-pill" title="Accuracy">100%</div>
+        <!-- Mute button -->
+        <button class="mute-btn" onclick="toggleMute()" title="Mute">🔊</button>
+        <!-- Color-blind indicator -->
         <button class="cb-mini" id="cb-mini" onclick="toggleCB()" title="Shape Mode">◑</button>
         <div class="diff-pill dp-easy" id="diff-pill">EASY</div>
       </div>
@@ -165,17 +142,20 @@
           <div class="stk-fill" id="stk-fill" style="width:0%"></div>
         </div>
         <span class="stk-val" id="stk-val">0</span>
+        <span class="mult-preview" id="mult-preview"></span>
       </div>
 
       <div class="inst-area">
         <div class="taunt"        id="taunt"></div>
         <div class="inst cr"      id="inst">GET READY</div>
+        <!-- Shape indicator for color-blind mode -->
         <div class="shape-ind"    id="shape-ind"></div>
         <div class="sub-inst"     id="sub-inst"></div>
         <div class="glitch-txt"   id="glitch-txt"></div>
         <div class="near-miss-el" id="near-miss"></div>
         <div class="combo-lbl"    id="combo-lbl"></div>
 
+        <!-- Hold progress ring -->
         <div class="hold-ring" id="hold-ring">
           <svg viewBox="0 0 40 40">
             <circle class="hr-bg"   cx="20" cy="20" r="18"/>
@@ -183,6 +163,7 @@
           </svg>
         </div>
 
+        <!-- Swipe direction arrow -->
         <div class="swipe-arrow" id="swipe-arrow"></div>
       </div>
 
