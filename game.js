@@ -104,6 +104,7 @@ setInterval(drawCorrupt, 80);
 //  AUDIO
 // ══════════════════════════════════════
 let AC = null;
+let isMuted = localStorage.getItem('pb_muted') === '1';
 
 function getAC() {
   if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -111,7 +112,19 @@ function getAC() {
   return AC;
 }
 
+function toggleMute() {
+  isMuted = !isMuted;
+  localStorage.setItem('pb_muted', isMuted ? '1' : '0');
+  // Update every mute button in the DOM
+  document.querySelectorAll('.mute-btn').forEach(el => {
+    el.textContent   = isMuted ? '🔇' : '🔊';
+    el.title         = isMuted ? 'Unmute' : 'Mute';
+    el.classList.toggle('muted', isMuted);
+  });
+}
+
 function beep(f, t, d, v, delay = 0) {
+  if (isMuted) return;
   try {
     const ctx = getAC(), o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
@@ -125,6 +138,7 @@ function beep(f, t, d, v, delay = 0) {
 }
 
 function noise(d = .05, v = .2, delay = 0) {
+  if (isMuted) return;
   try {
     const ctx = getAC(), buf = ctx.createBuffer(1, ctx.sampleRate * d, ctx.sampleRate);
     const data = buf.getChannelData(0);
@@ -305,6 +319,7 @@ function getRank(s) {
 //  STATE
 // ══════════════════════════════════════
 let score = 0, bestScore = +(localStorage.getItem('pb_best') || 0);
+let bestScoreDate = localStorage.getItem('pb_best_date') || null; // ISO timestamp
 let lives = 3, gameActive = false, roundEnded = false;
 let timerRAF = null, timerStart = 0, timerDur = 2000;
 let curInst = null, prevInst = null;
@@ -318,6 +333,10 @@ let roundN = 0, specialRound = null;
 let isFrenzy = false, frenzyCount = 0, frenzyDone = 0;
 let dblGuard = false, tripleCount = 0, tripleTO = null;
 let nearMissShown = false, lastPctVal = 1;
+
+// ── REACTION TIME TRACKING (Bug 1 fix) ──
+let reactTimes = [];          // ms for each action round
+let roundActionStart = 0;     // timestamp when the instruction appeared (non-wait rounds)
 
 // ══════════════════════════════════════
 //  DOM REFERENCES
@@ -341,9 +360,25 @@ const lifeEls    = [0, 1, 2].map(i => g('lf' + i));
 const goScore    = g('go-score'),   goBest     = g('go-best'),   goMsg  = g('go-msg');
 const goRank     = g('go-rank'),    goDied     = g('go-died'),   goNB   = g('go-nb');
 const hsNum      = g('hs-num');
+const reactSval  = g('react-sval'), goReact    = g('go-react'),  reactBD = g('react-breakdown');
 
-// ══════════════════════════════════════
-//  TIPS (device-aware)
+// ── TUTORIAL & START-SCREEN TAUNT ──
+let isFirstGame = !localStorage.getItem('pb_played');
+let tutorialStep = 0;
+const TUTORIAL_STEPS = [
+  { text: isMobile ? 'TAP NOW!' : 'CLICK NOW', type: 'click',  hint: isMobile ? '→ tap the big button' : '→ click the button', tutMsg: 'Welcome! When you see this, click the button.' },
+  { text: isMobile ? "DON'T TAP" : "DON'T CLICK", type: 'wait', hint: '→ do NOTHING',  tutMsg: 'Now wait — do NOT touch anything!' },
+  { text: isMobile ? 'DOUBLE TAP' : 'DOUBLE CLICK', type: 'dblclick', hint: isMobile ? '→ tap twice fast' : '→ click twice fast', tutMsg: 'Two taps/clicks in quick succession.' },
+];
+
+function showStartTaunt() {
+  const lastMsg = localStorage.getItem('pb_last_fail');
+  const el = document.getElementById('start-taunt');
+  if (el && lastMsg) {
+    el.textContent = '"' + lastMsg + '"';
+    el.classList.add('show');
+  }
+}
 // ══════════════════════════════════════
 function fillTips() {
   const grid = g('tips-grid');
@@ -357,7 +392,32 @@ function fillTips() {
 //  HELPERS
 // ══════════════════════════════════════
 const rand = a => a[Math.floor(Math.random() * a.length)];
-const pick = (a, x) => { const f = a.filter(i => i !== x); return rand(f.length ? f : a); };
+
+// Track last 3 instructions to prevent repetitive back-to-back picks
+const recentInsts = [];
+function pick(a) {
+  const filtered = a.filter(i => !recentInsts.includes(i));
+  const chosen = rand(filtered.length ? filtered : a);
+  recentInsts.push(chosen);
+  if (recentInsts.length > 3) recentInsts.shift();
+  return chosen;
+}
+
+function timeAgo(isoStr) {
+  if (!isoStr) return '';
+  const secs = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (secs < 60)    return 'just now';
+  if (secs < 3600)  return Math.floor(secs / 60) + 'm ago';
+  if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
+  const d = Math.floor(secs / 86400);
+  return d === 1 ? 'yesterday' : d + ' days ago';
+}
+
+function updateBestDateUI() {
+  const el = document.getElementById('hs-date');
+  if (!el) return;
+  el.textContent = bestScoreDate ? timeAgo(bestScoreDate) : '';
+}
 
 function updateScoreUI() {
   svalEl.textContent   = score;
@@ -367,6 +427,7 @@ function updateScoreUI() {
   setTimeout(() => svalEl.classList.remove('pop'), 170);
   bgIntensity  = Math.min(score / 32, 1);
   corruptLevel = Math.max(0, (score - 25) / 30);
+  updateBestDateUI();
 }
 
 function updateLives() {
@@ -380,6 +441,19 @@ function updateStreak() {
   const hot = streak >= STREAK_BONUS_AT;
   stkFill.classList.toggle('hot', hot);
   stkVal.classList.toggle('hot', hot);
+
+  // Live multiplier preview
+  const multEl = document.getElementById('mult-preview');
+  if (multEl) {
+    const m = calcMult ? calcMult() : 1;
+    if (m > 1) {
+      multEl.textContent = '×' + m;
+      multEl.classList.add('active');
+    } else {
+      multEl.textContent = '';
+      multEl.classList.remove('active');
+    }
+  }
 }
 
 function doFlash(cls) {
@@ -491,10 +565,12 @@ function setInst(inst, anim = 'appear') {
     setTimeout(() => {
       instEl.textContent = inst.text;
       instEl.className   = 'inst ' + inst.col + ' appear';
+      updateShapeInd();
     }, 150);
   } else {
     instEl.textContent = inst.text;
     instEl.className   = 'inst ' + inst.col + ' ' + anim;
+    updateShapeInd();
   }
 }
 
@@ -505,6 +581,9 @@ function clearAllTimers() {
   cancelAnimationFrame(holdRAF);
   stopHB();
   holdRingEl.classList.remove('show');
+  // Bug 6 fix: always disarm holdActive when clearing timers so that a keyup/touchend
+  // arriving after a timeout (roundEnded=true) cannot re-trigger handleWrong().
+  holdActive = false;
 }
 
 // ══════════════════════════════════════
@@ -593,6 +672,34 @@ function startRound() {
   dblGuard = false; tripleCount = 0; clearTimeout(tripleTO);
   roundN++;
 
+  // ── Tutorial mode (first-ever game, steps 0-2) ──
+  if (tutorialStep >= 0 && tutorialStep < TUTORIAL_STEPS.length) {
+    const ts   = TUTORIAL_STEPS[tutorialStep];
+    curInst    = ts;
+    specialRound = null;
+    const diff = { ms: 3500 }; // generous time for tutorial
+    diffPill.textContent = 'TUTORIAL'; diffPill.className = 'diff-pill dp-easy';
+    subInstEl.textContent = ts.hint;
+    pb.textContent = isMobile ? 'TAP ME!' : 'CLICK!';
+    pb.className   = '';
+    setInst(ts);
+    // Tutorial message via taunt slot
+    tauntEl.textContent = ts.tutMsg;
+    tauntEl.classList.remove('hot');
+    if (ts.type === 'wait') {
+      waitTO = setTimeout(() => {
+        if (!roundEnded) {
+          tutorialStep++;
+          doCorrect(null, 1);
+        }
+      }, diff.ms - 100);
+    } else {
+      roundActionStart = performance.now();
+    }
+    startTimer(diff.ms);
+    return;
+  }
+
   const diff = getDiff(score);
   diffPill.textContent = diff.name;
   diffPill.className   = 'diff-pill ' + diff.cls;
@@ -618,7 +725,7 @@ function startRound() {
   // Silent round every 15 (score ≥ 15)
   const isSilent = score >= 15 && roundN % 15 === 0;
 
-  let inst = pick(INSTS, prevInst);
+  let inst = pick(INSTS);
   prevInst = inst;
 
   if (specialRound === 'reverse') {
@@ -666,6 +773,8 @@ function startRound() {
   const mult = calcMult();
   if (inst.type === 'wait') {
     waitTO = setTimeout(() => { if (!roundEnded) doCorrect(null, mult); }, diff.ms - 100);
+  } else {
+    roundActionStart = performance.now(); // start reaction clock for non-wait rounds
   }
   startTimer(diff.ms);
 }
@@ -728,6 +837,10 @@ function scheduleSwitch(total) {
   }, at);
 }
 
+function updateFrenzyBanner() {
+  spBan.textContent = `⚠ FRENZY ${frenzyDone + 1}/${frenzyCount} ⚠`;
+}
+
 // ── FRENZY ──
 function launchFrenzy(diff) {
   isFrenzy = true;
@@ -744,6 +857,7 @@ function runFrenzyRound(diff) {
   if (!gameActive) return;
   if (frenzyDone >= frenzyCount) { endFrenzy(); return; }
   resetButton(); holdActive = false; holdDone = false; dblGuard = false; mouseDist = 0; roundEnded = false;
+  updateFrenzyBanner();
   const inst = rand(FRENZY_INSTS);
   curInst = inst; specialRound = 'frenzy'; subInstEl.textContent = '';
   pb.textContent = rand(BTN_LBLS[inst.type] || BTN_LBLS.click);
@@ -759,8 +873,12 @@ function frenzyOK() {
   roundEnded = true; clearAllTimers(); S.ok(); vibOK();
   const earned = 1 + Math.floor(streak / STREAK_BONUS_AT);
   score += earned;
-  if (score > bestScore) bestScore = score;
-  localStorage.setItem('pb_best', bestScore);
+  if (score > bestScore) {
+    bestScore = score;
+    bestScoreDate = new Date().toISOString();
+    localStorage.setItem('pb_best', bestScore);
+    localStorage.setItem('pb_best_date', bestScoreDate);
+  }
   streak++; updateScoreUI(); updateStreak(); doFlash('fg'); frenzyDone++;
   showFB('✓', 'ok');
   setTimeout(() => runFrenzyRound(getDiff(score)), 110);
@@ -785,13 +903,32 @@ function doCorrect(ev, multOverride) {
   if (roundEnded) return;
   if (isFrenzy) { frenzyOK(); return; }
   roundEnded = true; clearAllTimers(); S.click(); vibOK();
+
+  // Advance tutorial step
+  if (tutorialStep >= 0 && tutorialStep < TUTORIAL_STEPS.length) {
+    tutorialStep++;
+    if (tutorialStep >= TUTORIAL_STEPS.length) tutorialStep = -1; // done
+  }
+
+  // Record reaction time for non-wait rounds
+  if (roundActionStart > 0 && curInst && curInst.type !== 'wait') {
+    const rt = Math.round(performance.now() - roundActionStart);
+    reactTimes.push(rt);
+    const avg = Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length);
+    reactSval.textContent = avg + 'ms';
+  }
+  roundActionStart = 0;
   streak++; updateStreak(); if (streak > 1) showCombo(streak);
 
   const mult   = multOverride !== undefined ? multOverride : calcMult();
   const earned = Math.max(1, mult);
   score += earned;
-  if (score > bestScore) bestScore = score;
-  localStorage.setItem('pb_best', bestScore);
+  if (score > bestScore) {
+    bestScore = score;
+    bestScoreDate = new Date().toISOString();
+    localStorage.setItem('pb_best', bestScore);
+    localStorage.setItem('pb_best_date', bestScoreDate);
+  }
   updateScoreUI();
 
   const pr = getRank(score - earned), nr = getRank(score);
@@ -900,6 +1037,9 @@ function handleKeyUp(e) {
   if (e.code !== 'Space' || !holdActive) return;
   holdActive = false; clearTimeout(holdTO); cancelAnimationFrame(holdRAF);
   holdRingEl.classList.remove('show');
+  // Bug 6 fix: check roundEnded AND gameActive here — the timeout may have already
+  // ended the round (setting roundEnded=true) while the key was still physically held,
+  // so releasing it must not fire handleWrong() on the dead round.
   if (!holdDone && !roundEnded && gameActive && curInst && curInst.type === 'hold_space') handleWrong();
 }
 
@@ -926,7 +1066,11 @@ pb.addEventListener('touchstart', (e) => {
   }
 }, { passive: false });
 
-// Tap / release — touchend (primary handler)
+// Tap / release — touchend (single unified handler, Bug 5 fix)
+// Previously there were TWO touchend listeners for dblclick (one bubble, one capture)
+// which caused a race: the bubble handler could fire handleWrong() before the
+// capture handler registered the second tap. Now handled entirely here with lastTapTime.
+let lastTapTime = 0;
 pb.addEventListener('touchend', (e) => {
   if (!gameActive || roundEnded || !curInst) return;
   e.preventDefault(); e.stopPropagation();
@@ -939,25 +1083,30 @@ pb.addEventListener('touchend', (e) => {
     return;
   }
   if (t === 'tripleclick') { handleTriple(e.changedTouches[0] || e); return; }
+
+  // Unified double-tap: track timing here, no separate capture listener needed
   if (t === 'dblclick') {
-    dblGuard = true;
-    setTimeout(() => { if (!roundEnded && dblGuard) { dblGuard = false; handleWrong(); } }, 320);
+    const now = Date.now();
+    if (now - lastTapTime < 350) {
+      // Second tap within window — success
+      lastTapTime = 0;
+      doCorrect(e.changedTouches[0] || e);
+    } else {
+      // First tap — start the window, arm a wrong-answer timeout
+      lastTapTime = now;
+      dblGuard = true;
+      setTimeout(() => {
+        // If lastTapTime was reset by second tap, dblGuard is already false — skip
+        if (!roundEnded && dblGuard && lastTapTime !== 0) {
+          dblGuard = false; lastTapTime = 0; handleWrong();
+        }
+      }, 350);
+    }
     return;
   }
+
   t === 'click' ? doCorrect(e.changedTouches[0] || e) : handleWrong();
 }, { passive: false });
-
-// Double-tap detector (capture phase)
-let lastTapTime = 0;
-pb.addEventListener('touchend', (e) => {
-  if (!gameActive || roundEnded || !curInst || curInst.type !== 'dblclick') return;
-  const now = Date.now();
-  if (now - lastTapTime < 320) {
-    dblGuard = false; doCorrect(e.changedTouches[0] || e); lastTapTime = 0;
-  } else {
-    lastTapTime = now;
-  }
-}, { passive: false, capture: true });
 
 // Swipe — touchstart on cabinet
 cab.addEventListener('touchstart', (e) => {
@@ -1017,14 +1166,36 @@ function gameOver() {
   doShake(); doFlash('fr'); S.wrong(); streak = 0; updateStreak();
 
   const isNew = score > 0 && score >= bestScore;
-  if (score > bestScore) { bestScore = score; localStorage.setItem('pb_best', bestScore); }
+  if (score > bestScore) {
+    bestScore = score;
+    bestScoreDate = new Date().toISOString();
+    localStorage.setItem('pb_best', bestScore);
+    localStorage.setItem('pb_best_date', bestScoreDate);
+  }
 
   goScore.textContent = score;
   goBest.textContent  = bestScore;
-  goMsg.textContent   = rand(FAIL_MSGS);
+  const failMsg = rand(FAIL_MSGS);
+  localStorage.setItem('pb_last_fail', failMsg);
+  goMsg.textContent   = failMsg;
   goRank.textContent  = getRank(score);
   goDied.textContent  = 'Died on: ' + (curInst ? curInst.text : '???');
   goNB.className      = isNew ? 'new-best-badge' : 'new-best-badge hidden';
+
+  // Reaction time summary
+  if (reactTimes.length > 0) {
+    const avg = Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length);
+    goReact.textContent = avg + 'ms';
+    const last8 = reactTimes.slice(-8);
+    reactBD.innerHTML = last8.map(t => {
+      const cls = t < 350 ? 'fast' : t < 650 ? 'mid' : 'slow';
+      return `<span class="rt-pill ${cls}">${t}ms</span>`;
+    }).join('');
+  } else {
+    goReact.textContent = '—';
+    reactBD.innerHTML = '';
+  }
+
   scrGO.classList.remove('off');
 }
 
@@ -1039,6 +1210,18 @@ function startGame() {
   score = 0; lives = 3; streak = 0; roundN = 0;
   prevInst = null; specialRound = null; isFrenzy = false;
   bgIntensity = 0; corruptLevel = 0; ekgPanic = 0;
+  reactTimes = []; roundActionStart = 0;
+  reactSval.textContent = '—';
+  recentInsts.length = 0;
+
+  // Tutorial on first ever game
+  if (isFirstGame) {
+    tutorialStep = 0;
+    localStorage.setItem('pb_played', '1');
+    isFirstGame = false;
+  } else {
+    tutorialStep = -1; // -1 = tutorial done
+  }
 
   gameActive = true;
   updateScoreUI(); updateLives(); updateStreak();
@@ -1048,9 +1231,150 @@ function startGame() {
   startRound();
 }
 
+// ── COPY RESULT (Bug 3 fix) ──
+function copyResult() {
+  const avg = reactTimes.length
+    ? Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length) + 'ms'
+    : '—';
+  const text =
+    `🚨 PANIC BUTTON\n` +
+    `Score: ${score}  |  Best: ${bestScore}\n` +
+    `Rank: ${getRank(score)}\n` +
+    `Avg React: ${avg}\n` +
+    `Died on: ${curInst ? curInst.text : '???'}\n` +
+    `Play at: panic-button.game`;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('btn-copy');
+    btn.classList.add('copied');
+    btn.innerHTML = '<span>✓</span> COPIED!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = '<span id="copy-icon">📋</span> COPY RESULT';
+    }, 2000);
+  }).catch(() => {
+    // Fallback for browsers without clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  });
+}
+
 // ══════════════════════════════════════
-//  EVENT LISTENERS
 // ══════════════════════════════════════
+let cbMode = false;
+
+const SHAPE_MAP = {
+  click:       '▶',
+  wait:        '✋',
+  dblclick:    '▶▶',
+  tripleclick: '▶▶▶',
+  rightclick:  '◀',
+  move:        '〰',
+  hold_space:  '⏸',
+  hold_btn:    '⏸',
+  space:       '▣',
+  enter:       '↵',
+  key_a:       'Ⓐ',
+  key_escape:  '✕',
+  swipe_up:    '⬆',
+  swipe_down:  '⬇',
+  swipe_left:  '⬅',
+  swipe_right: '➡',
+};
+
+function toggleCB() {
+  cbMode = !cbMode;
+  document.body.classList.toggle('cb-mode', cbMode);
+  // Update all toggle buttons
+  ['cb-toggle-start','cb-mini'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const lbl = el.querySelector('[id^="cb-label"]');
+    if (lbl) lbl.textContent = 'Shape Mode: ' + (cbMode ? 'ON' : 'OFF');
+    el.classList.toggle('on', cbMode);
+  });
+  // Update shape indicator if mid-game
+  updateShapeInd();
+}
+
+function updateShapeInd() {
+  const ind = document.getElementById('shape-ind');
+  if (!ind) return;
+  if (cbMode && curInst) {
+    ind.textContent = SHAPE_MAP[curInst.type] || '';
+  } else {
+    ind.textContent = '';
+  }
+}
+
+// ══════════════════════════════════════
+// ══════════════════════════════════════
+
+// ── PAUSE ON TAB AWAY (Bug 4 fix) ──
+let isPaused = false;
+let pauseTimeRemaining = 0;
+
+function pauseGame() {
+  if (!gameActive || isPaused || roundEnded) return;
+  isPaused = true;
+  pauseTimeRemaining = Math.max(0, timerDur - (performance.now() - timerStart));
+  cancelAnimationFrame(timerRAF);
+  clearTimeout(waitTO); clearTimeout(switchTO);
+  clearTimeout(holdTO); clearTimeout(tauntTO);
+  stopHB();
+  document.getElementById('pause-ov').classList.add('show');
+}
+
+function resumeGame() {
+  if (!gameActive || !isPaused) return;
+  isPaused = false;
+  document.getElementById('pause-ov').classList.remove('show');
+  if (roundEnded) return;
+
+  // Re-anchor timerStart so remaining time is honoured
+  timerStart = performance.now() - (timerDur - pauseTimeRemaining);
+
+  if (curInst && curInst.type === 'wait') {
+    const mult = calcMult();
+    waitTO = setTimeout(() => { if (!roundEnded) doCorrect(null, mult); }, pauseTimeRemaining - 100);
+  }
+  startHB(pauseTimeRemaining);
+  startTaunt(pauseTimeRemaining);
+
+  // Restart RAF timer loop
+  (function tick() {
+    const el  = performance.now() - timerStart;
+    const pct = Math.max(0, 1 - el / timerDur);
+    const rem = Math.max(0, (timerDur - el) / 1000);
+    tbarEl.style.width     = (pct * 100) + '%';
+    timerNumEl.textContent = rem.toFixed(1) + 's';
+    if (pct < .18) {
+      tbarEl.className = 'timer-bar danger'; timerNumEl.className = 'timer-num danger';
+      chromaOn(); instEl.classList.add('jitter');
+      if (curInst && curInst.type === 'click') pb.classList.add('danger-pulse');
+    } else if (pct < .45) {
+      tbarEl.className = 'timer-bar warn'; timerNumEl.className = 'timer-num warn';
+      chromaOff(); instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+    } else {
+      tbarEl.className = 'timer-bar'; timerNumEl.className = 'timer-num';
+      chromaOff(); instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+    }
+    if (el >= timerDur) {
+      tbarEl.style.width = '0%'; chromaOff();
+      instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+      handleTimeout();
+    } else { timerRAF = requestAnimationFrame(tick); }
+  })();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseGame();
+  else resumeGame();
+});
 
 // Start / Retry buttons
 btnStart.addEventListener('click',    startGame);
@@ -1074,7 +1398,17 @@ document.addEventListener('touchmove', e => { if (gameActive) e.preventDefault()
 //  INIT
 // ══════════════════════════════════════
 fillTips();
-updateScoreUI();
+updateScoreUI();       // also calls updateBestDateUI
 bestSval.textContent = bestScore;
 hsNum.textContent    = bestScore;
 updateLives();
+showStartTaunt();
+
+// Apply saved mute state to all mute buttons on load
+if (isMuted) {
+  document.querySelectorAll('.mute-btn').forEach(el => {
+    el.textContent = '🔇';
+    el.title       = 'Unmute';
+    el.classList.add('muted');
+  });
+}
