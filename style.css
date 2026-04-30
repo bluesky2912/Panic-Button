@@ -1175,6 +1175,8 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .cb-toggle {
@@ -1399,12 +1401,16 @@ body::after {
   pointer-events: none;
   opacity: 0;
   z-index: 201;
+  /* Keep centred, never overflow cabinet */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
-@keyframes arrow-up    { 0%{opacity:0;transform:translateY(0)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translateY(-50px)} }
-@keyframes arrow-down  { 0%{opacity:0;transform:translateY(0)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translateY(50px)} }
-@keyframes arrow-left  { 0%{opacity:0;transform:translateX(0)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translateX(-50px)} }
-@keyframes arrow-right { 0%{opacity:0;transform:translateX(0)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translateX(50px)} }
+@keyframes arrow-up    { 0%{opacity:0;transform:translate(-50%,-50%)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translate(-50%,calc(-50% - 48px))} }
+@keyframes arrow-down  { 0%{opacity:0;transform:translate(-50%,-50%)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translate(-50%,calc(-50% + 48px))} }
+@keyframes arrow-left  { 0%{opacity:0;transform:translate(-50%,-50%)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translate(calc(-50% - 48px),-50%)} }
+@keyframes arrow-right { 0%{opacity:0;transform:translate(-50%,-50%)}   20%{opacity:1} 80%{opacity:1} 100%{opacity:0;transform:translate(calc(-50% + 48px),-50%)} }
 
 .swipe-arrow.up    { animation: arrow-up    .8s ease-out forwards; }
 .swipe-arrow.down  { animation: arrow-down  .8s ease-out forwards; }
@@ -1415,3 +1421,85 @@ body::after {
    UTILITY
    ══════════════════════════════════════ */
 .hidden { display: none !important; }
+
+/* ── MUTE BUTTON ── */
+.mute-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  font-size: clamp(10px, 2.8vw, 13px);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .2s, border-color .2s;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.mute-btn:active, .mute-btn.muted {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.mute-btn-lg {
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  border-radius: 6px;
+}
+
+/* ── MULTIPLIER PREVIEW ── */
+.mult-preview {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(11px, 3vw, 14px);
+  letter-spacing: 1px;
+  color: var(--orange);
+  text-shadow: 0 0 8px #ff5500;
+  min-width: 28px;
+  text-align: right;
+  opacity: 0;
+  transition: opacity .2s;
+}
+
+.mult-preview.active {
+  opacity: 1;
+  animation: mp-pulse .5s ease-in-out infinite alternate;
+}
+
+@keyframes mp-pulse {
+  from { text-shadow: 0 0 5px #ff5500; }
+  to   { text-shadow: 0 0 14px #ff5500, 0 0 28px #ff550066; }
+}
+
+/* ── START SCREEN TAUNT ── */
+.start-taunt {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(8px, 2.2vw, 10px);
+  letter-spacing: 1px;
+  color: var(--red);
+  text-shadow: 0 0 6px #ff113388;
+  text-align: center;
+  min-height: 14px;
+  opacity: 0;
+  font-style: italic;
+  max-width: 280px;
+  line-height: 1.4;
+  transition: opacity .4s;
+}
+
+.start-taunt.show { opacity: 1; }
+
+/* ── BEST SCORE DATE ── */
+.hs-date {
+  font-size: clamp(7px, 2vw, 9px);
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-top: 2px;
+  min-height: 10px;
+}
