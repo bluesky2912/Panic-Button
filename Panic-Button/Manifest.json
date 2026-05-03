@@ -1,0 +1,16 @@
+{
+  "name": "PANIC BUTTON",
+  "short_name": "PANIC",
+  "description": "React. Survive. Repeat. 3 lives. No mercy.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030306",
+  "theme_color": "#ff1133",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["games"],
+  "screenshots": []
+}

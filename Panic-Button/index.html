@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#ff1133">
+  <title>PANIC BUTTON</title>
+  <link rel="manifest" href="Manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&family=Bebas+Neue&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <canvas id="bgcanvas"></canvas>
+
+  <!-- PWA Install Banner -->
+  <div class="install-banner" id="install-banner">
+    <span class="install-txt">📲 Add to Home Screen</span>
+    <button class="install-btn" id="install-btn">INSTALL</button>
+    <button class="install-dismiss" id="install-dismiss">✕</button>
+  </div>
+
+  <div id="app">
+    <div class="cab" id="cab">
+
+      <!-- Corner accents -->
+      <div class="corner c-tl"></div>
+      <div class="corner c-tr"></div>
+      <div class="corner c-bl"></div>
+      <div class="corner c-br"></div>
+
+      <!-- Overlays -->
+      <canvas class="corrupt-ov" id="corrupt" width="440" height="780"></canvas>
+      <div class="flash-ov"    id="flash"></div>
+      <div class="frenzy-ring" id="fr-ring"></div>
+      <div class="sp-ban"      id="sp-ban"></div>
+      <div class="big-mult"    id="big-mult"></div>
+      <div class="pts-float"   id="pts-float"></div>
+      <div class="lc-ov"       id="lc-ov">
+        <div class="lc-txt" id="lc-txt"></div>
+      </div>
+
+      <!-- Pause overlay -->
+      <div class="pause-ov" id="pause-ov">
+        <div class="pause-icon">⏸</div>
+        <div class="pause-txt">PAUSED</div>
+        <div class="pause-sub">Tab back to resume</div>
+      </div>
+
+      <!-- ── START SCREEN ── -->
+      <div class="screen" id="scr-start">
+        <div class="s-logo">PANIC<br>BUTTON</div>
+        <div class="s-sub">React. Survive. Repeat.<br>3 lives. No mercy.</div>
+
+        <!-- Last game taunt -->
+        <div class="start-taunt" id="start-taunt"></div>
+
+        <!-- ── MODE SELECTOR ── -->
+        <div class="mode-row">
+          <button class="mode-btn active" data-mode="classic" onclick="selectMode('classic')">
+            <span class="mode-icon">🎮</span>
+            <span class="mode-name">CLASSIC</span>
+            <span class="mode-desc">3 lives</span>
+          </button>
+          <button class="mode-btn" data-mode="sprint" onclick="selectMode('sprint')">
+            <span class="mode-icon">⚡</span>
+            <span class="mode-name">SPRINT</span>
+            <span class="mode-desc">30 sec</span>
+          </button>
+          <button class="mode-btn" data-mode="zen" onclick="selectMode('zen')">
+            <span class="mode-icon">☯</span>
+            <span class="mode-name">ZEN</span>
+            <span class="mode-desc">no lives</span>
+          </button>
+          <button class="mode-btn" data-mode="daily" onclick="selectMode('daily')">
+            <span class="mode-icon">📅</span>
+            <span class="mode-name">DAILY</span>
+            <span class="mode-desc">seeded</span>
+          </button>
+        </div>
+
+        <!-- Best scores per mode -->
+        <div class="hs-panel">
+          <span class="hs-lbl" id="hs-lbl">Best Score</span>
+          <div class="hs-num" id="hs-num">0</div>
+          <div class="hs-date" id="hs-date"></div>
+        </div>
+
+        <!-- Theme picker -->
+        <div class="theme-row" id="theme-row">
+          <span class="theme-lbl">SKIN</span>
+          <div class="theme-swatches" id="theme-swatches"></div>
+        </div>
+
+        <!-- Sound + Shape toggles -->
+        <div class="cb-toggle-wrap">
+          <button class="mute-btn mute-btn-lg" onclick="toggleMute()">🔊</button>
+          <button class="cb-toggle" id="cb-toggle-start" onclick="toggleCB()">
+            <span class="cb-icon" id="cb-icon-start">◐</span>
+            <span id="cb-label-start">Shape Mode: OFF</span>
+          </button>
+        </div>
+
+        <div class="tips-grid" id="tips-grid"></div>
+        <button class="btn-cta" id="btn-start">PLAY</button>
+      </div>
+
+      <!-- ── GAME OVER SCREEN ── -->
+      <div class="screen off" id="scr-go">
+        <div class="go-title">GAME<br>OVER</div>
+        <div class="go-msg"  id="go-msg">Your brain lagged.</div>
+
+        <div class="go-scrs">
+          <div class="go-sbox">
+            <span class="go-slbl">Score</span>
+            <div class="go-sval" id="go-score">0</div>
+          </div>
+          <div class="go-sbox">
+            <span class="go-slbl">Best</span>
+            <div class="go-sval" id="go-best">0</div>
+          </div>
+          <div class="go-sbox">
+            <span class="go-slbl">Avg React</span>
+            <div class="go-sval go-sval-sm" id="go-react">—</div>
+          </div>
+        </div>
+
+        <div class="new-best-badge hidden" id="go-nb">★ NEW BEST ★</div>
+        <div class="go-rank"  id="go-rank">BEGINNER</div>
+        <div class="go-died"  id="go-died"></div>
+
+        <!-- Daily mode result -->
+        <div class="daily-result hidden" id="daily-result">
+          <div class="daily-num" id="daily-num"></div>
+          <div class="daily-grid" id="daily-grid"></div>
+        </div>
+
+        <!-- Reaction time breakdown -->
+        <div class="react-breakdown" id="react-breakdown"></div>
+
+        <!-- Share card canvas (hidden, used for image export) -->
+        <canvas id="share-canvas" width="600" height="400" style="display:none"></canvas>
+
+        <!-- Action buttons -->
+        <div class="go-actions">
+          <button class="btn-copy" id="btn-copy" onclick="copyResult()">
+            <span>📋</span> COPY
+          </button>
+          <button class="btn-copy btn-share-img" id="btn-share-img" onclick="shareImage()">
+            <span>🖼️</span> SHARE
+          </button>
+        </div>
+
+        <div class="go-btns">
+          <button class="btn-cta" id="btn-retry">RETRY</button>
+        </div>
+      </div>
+
+      <!-- ── GAME UI ── -->
+      <div class="hdr">
+        <div class="game-title">PANIC BUTTON</div>
+        <div class="tagline">react · survive · panic harder</div>
+      </div>
+      <div class="hb-stripe" id="hb-stripe"></div>
+
+      <div class="top-row">
+        <span class="lives-lbl" id="lives-lbl">Lives</span>
+        <span class="life" id="lf0">❤️</span>
+        <span class="life" id="lf1">❤️</span>
+        <span class="life" id="lf2">❤️</span>
+        <!-- Sprint timer badge -->
+        <div class="sprint-badge hidden" id="sprint-badge">⚡ <span id="sprint-time">30</span>s</div>
+        <div class="spacer"></div>
+        <button class="mute-btn" onclick="toggleMute()" title="Mute">🔊</button>
+        <button class="cb-mini" id="cb-mini" onclick="toggleCB()" title="Shape Mode">◑</button>
+        <div class="diff-pill dp-easy" id="diff-pill">EASY</div>
+      </div>
+
+      <div class="score-row">
+        <div class="sbox">
+          <span class="slbl">Score</span>
+          <div class="sval" id="sval">0</div>
+          <div class="rank-lbl" id="rank-lbl">BEGINNER</div>
+        </div>
+        <div class="sbox">
+          <span class="slbl">Best</span>
+          <div class="sval" id="best-sval">0</div>
+        </div>
+        <div class="sbox sbox-react">
+          <span class="slbl">Avg React</span>
+          <div class="sval sval-sm" id="react-sval">—</div>
+        </div>
+      </div>
+
+      <div class="streak-row">
+        <span class="stk-lbl">Streak</span>
+        <div class="stk-track">
+          <div class="stk-fill" id="stk-fill" style="width:0%"></div>
+        </div>
+        <span class="stk-val" id="stk-val">0</span>
+        <span class="mult-preview" id="mult-preview"></span>
+      </div>
+
+      <div class="inst-area">
+        <div class="taunt"        id="taunt"></div>
+        <div class="inst cr"      id="inst">GET READY</div>
+        <div class="shape-ind"    id="shape-ind"></div>
+        <div class="sub-inst"     id="sub-inst"></div>
+        <div class="glitch-txt"   id="glitch-txt"></div>
+        <div class="near-miss-el" id="near-miss"></div>
+        <div class="combo-lbl"    id="combo-lbl"></div>
+
+        <div class="hold-ring" id="hold-ring">
+          <svg viewBox="0 0 40 40">
+            <circle class="hr-bg"   cx="20" cy="20" r="18"/>
+            <circle class="hr-fill" id="hr-fill" cx="20" cy="20" r="18"/>
+          </svg>
+        </div>
+        <div class="swipe-arrow" id="swipe-arrow"></div>
+      </div>
+
+      <div class="timer-wrap">
+        <div class="timer-top">
+          <span class="timer-lbl">Time</span>
+          <span class="timer-num" id="timer-num">2.0s</span>
+        </div>
+        <div class="timer-track">
+          <div class="timer-bar" id="tbar" style="width:100%"></div>
+        </div>
+      </div>
+
+      <div class="btn-zone" id="btn-zone">
+        <button id="pb">PANIC!</button>
+      </div>
+
+      <div class="feedback" id="feedback"></div>
+
+    </div><!-- /.cab -->
+  </div><!-- /#app -->
+
+  <script src="game.js"></script>
+</body>
+</html>
