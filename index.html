@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#ff1133">
   <title>PANIC BUTTON</title>
+  <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&family=Bebas+Neue&display=swap">
   <link rel="stylesheet" href="style.css">
@@ -13,6 +15,13 @@
 <body>
 
   <canvas id="bgcanvas"></canvas>
+
+  <!-- PWA Install Banner -->
+  <div class="install-banner" id="install-banner">
+    <span class="install-txt">📲 Add to Home Screen</span>
+    <button class="install-btn" id="install-btn">INSTALL</button>
+    <button class="install-dismiss" id="install-dismiss">✕</button>
+  </div>
 
   <div id="app">
     <div class="cab" id="cab">
@@ -45,15 +54,61 @@
       <div class="screen" id="scr-start">
         <div class="s-logo">PANIC<br>BUTTON</div>
         <div class="s-sub">React. Survive. Repeat.<br>3 lives. No mercy.</div>
+
         <!-- Last game taunt -->
         <div class="start-taunt" id="start-taunt"></div>
-        <div class="tips-grid" id="tips-grid"></div>
+
+        <!-- ── MODE SELECTOR ── -->
+        <div class="mode-row">
+          <button class="mode-btn active" data-mode="classic" onclick="selectMode('classic')">
+            <span class="mode-icon">🎮</span>
+            <span class="mode-name">CLASSIC</span>
+            <span class="mode-desc">3 lives</span>
+          </button>
+          <button class="mode-btn" data-mode="sprint" onclick="selectMode('sprint')">
+            <span class="mode-icon">⚡</span>
+            <span class="mode-name">SPRINT</span>
+            <span class="mode-desc">30 sec</span>
+          </button>
+          <button class="mode-btn" data-mode="zen" onclick="selectMode('zen')">
+            <span class="mode-icon">☯</span>
+            <span class="mode-name">ZEN</span>
+            <span class="mode-desc">no lives</span>
+          </button>
+          <button class="mode-btn" data-mode="daily" onclick="selectMode('daily')">
+            <span class="mode-icon">📅</span>
+            <span class="mode-name">DAILY</span>
+            <span class="mode-desc">seeded</span>
+          </button>
+        </div>
+
+        <!-- ── EXTRA MODES ROW ── -->
+        <div class="extra-modes-row">
+          <button class="extra-mode-btn" onclick="startHotSeat()">
+            <span>👥</span> 2P HOT SEAT
+          </button>
+          <button class="extra-mode-btn" onclick="startTraining()">
+            <span>🎯</span> TRAINING
+          </button>
+          <button class="extra-mode-btn" onclick="openRoundEditor()">
+            <span>✏️</span> ROUNDS
+          </button>
+        </div>
+
+        <!-- Best scores per mode -->
         <div class="hs-panel">
-          <span class="hs-lbl">Best Score</span>
+          <span class="hs-lbl" id="hs-lbl">Best Score</span>
           <div class="hs-num" id="hs-num">0</div>
           <div class="hs-date" id="hs-date"></div>
         </div>
-        <!-- Sound toggle on start -->
+
+        <!-- Theme picker -->
+        <div class="theme-row" id="theme-row">
+          <span class="theme-lbl">SKIN</span>
+          <div class="theme-swatches" id="theme-swatches"></div>
+        </div>
+
+        <!-- Sound + Shape toggles -->
         <div class="cb-toggle-wrap">
           <button class="mute-btn mute-btn-lg" onclick="toggleMute()">🔊</button>
           <button class="cb-toggle" id="cb-toggle-start" onclick="toggleCB()">
@@ -61,6 +116,8 @@
             <span id="cb-label-start">Shape Mode: OFF</span>
           </button>
         </div>
+
+        <div class="tips-grid" id="tips-grid"></div>
         <button class="btn-cta" id="btn-start">PLAY</button>
       </div>
 
@@ -68,6 +125,7 @@
       <div class="screen off" id="scr-go">
         <div class="go-title">GAME<br>OVER</div>
         <div class="go-msg"  id="go-msg">Your brain lagged.</div>
+
         <div class="go-scrs">
           <div class="go-sbox">
             <span class="go-slbl">Score</span>
@@ -82,17 +140,32 @@
             <div class="go-sval go-sval-sm" id="go-react">—</div>
           </div>
         </div>
+
         <div class="new-best-badge hidden" id="go-nb">★ NEW BEST ★</div>
-        <div class="go-rank" id="go-rank">BEGINNER</div>
-        <div class="go-died" id="go-died"></div>
+        <div class="go-rank"  id="go-rank">BEGINNER</div>
+        <div class="go-died"  id="go-died"></div>
+
+        <!-- Daily mode result -->
+        <div class="daily-result hidden" id="daily-result">
+          <div class="daily-num" id="daily-num"></div>
+          <div class="daily-grid" id="daily-grid"></div>
+        </div>
 
         <!-- Reaction time breakdown -->
         <div class="react-breakdown" id="react-breakdown"></div>
 
-        <!-- Copy result button -->
-        <button class="btn-copy" id="btn-copy" onclick="copyResult()">
-          <span id="copy-icon">📋</span> COPY RESULT
-        </button>
+        <!-- Share card canvas (hidden, used for image export) -->
+        <canvas id="share-canvas" width="600" height="400" style="display:none"></canvas>
+
+        <!-- Action buttons -->
+        <div class="go-actions">
+          <button class="btn-copy" id="btn-copy" onclick="copyResult()">
+            <span>📋</span> COPY
+          </button>
+          <button class="btn-copy btn-share-img" id="btn-share-img" onclick="shareImage()">
+            <span>🖼️</span> SHARE
+          </button>
+        </div>
 
         <div class="go-btns">
           <button class="btn-cta" id="btn-retry">RETRY</button>
@@ -107,15 +180,18 @@
       <div class="hb-stripe" id="hb-stripe"></div>
 
       <div class="top-row">
-        <span class="lives-lbl">Lives</span>
-        <!-- FIXED: exactly 3 hearts with unique IDs -->
+        <span class="lives-lbl" id="lives-lbl">Lives</span>
         <span class="life" id="lf0">❤️</span>
         <span class="life" id="lf1">❤️</span>
         <span class="life" id="lf2">❤️</span>
+        <!-- Sprint timer badge -->
+        <div class="sprint-badge hidden" id="sprint-badge">⚡ <span id="sprint-time">30</span>s</div>
+        <!-- Hot seat HUD -->
+        <div class="hs-hud hidden" id="hs-hud"></div>
+        <!-- Training HUD -->
+        <div class="training-hud hidden" id="training-hud"></div>
         <div class="spacer"></div>
-        <!-- Mute button -->
         <button class="mute-btn" onclick="toggleMute()" title="Mute">🔊</button>
-        <!-- Color-blind indicator -->
         <button class="cb-mini" id="cb-mini" onclick="toggleCB()" title="Shape Mode">◑</button>
         <div class="diff-pill dp-easy" id="diff-pill">EASY</div>
       </div>
@@ -148,22 +224,18 @@
       <div class="inst-area">
         <div class="taunt"        id="taunt"></div>
         <div class="inst cr"      id="inst">GET READY</div>
-        <!-- Shape indicator for color-blind mode -->
         <div class="shape-ind"    id="shape-ind"></div>
         <div class="sub-inst"     id="sub-inst"></div>
         <div class="glitch-txt"   id="glitch-txt"></div>
         <div class="near-miss-el" id="near-miss"></div>
         <div class="combo-lbl"    id="combo-lbl"></div>
 
-        <!-- Hold progress ring -->
         <div class="hold-ring" id="hold-ring">
           <svg viewBox="0 0 40 40">
             <circle class="hr-bg"   cx="20" cy="20" r="18"/>
             <circle class="hr-fill" id="hr-fill" cx="20" cy="20" r="18"/>
           </svg>
         </div>
-
-        <!-- Swipe direction arrow -->
         <div class="swipe-arrow" id="swipe-arrow"></div>
       </div>
 
