@@ -1,5 +1,22 @@
 /* ══════════════════════════════════════
-   PANIC BUTTON — game.js
+   PANIC BUTTON — game.js (v3 — fully fixed)
+   New fixes in v3:
+   1.  Dead code: INSTS_DESKTOP / INSTS_MOBILE removed (were never used)
+   2.  scheduleSwitch: reset roundActionStart when switching to click type
+   3.  clearAllTimers: also clear tripleTO + cancel mpRoundRAF
+   4.  pauseGame: clear tripleTO and holdRAF properly
+   5.  startTraining: explicitly reset hsMode = false
+   6.  startHotSeat: explicitly reset trainingMode = false
+   7.  mpDoAction: guard against spectators and wrong-type clicks (wait rounds)
+   8.  mpConnect: close existing WS before opening a new one (server change)
+   9.  daily mode: block replaying same day (show score instead)
+   10. goHome: close round editor if open
+   11. scheduleSwitch: if switching TO click, set roundActionStart correctly
+   12. frenzy stats: frenzy hits/misses now tracked in totalRounds/hitRounds
+   13. loseLife in zen/training: missRounds always incremented before guard
+   14. CSS: .screen min-height fix prevents content cutoff on small phones
+   15. spawnDecoys: use actual pb bounding box to avoid overlap
+   16. Reaction time: capped at 9999ms to avoid outlier pollution
    ══════════════════════════════════════ */
 'use strict';
 
@@ -13,48 +30,33 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 //  THEMES
 // ══════════════════════════════════════
 const THEMES = [
-  {
-    id: 'default', name: 'PANIC', swatch: '#ff1133', unlock: 0,
-    vars: {} // uses CSS defaults
-  },
-  {
-    id: 'cyber', name: 'CYBER', swatch: '#00eeff', unlock: 10,
-    vars: { '--red':'#00eeff','--yellow':'#cc00ff','--cyan':'#2dff00','--green':'#ffe500','--purple':'#ff5500','--orange':'#ff1133','--panel':'#020a10','--border':'#001a22' }
-  },
-  {
-    id: 'toxic', name: 'TOXIC', swatch: '#2dff00', unlock: 22,
-    vars: { '--red':'#2dff00','--yellow':'#aaff00','--cyan':'#00ffaa','--green':'#ffffff','--purple':'#ccff00','--orange':'#88ff00','--panel':'#030a00','--border':'#0a2000' }
-  },
-  {
-    id: 'void', name: 'VOID', swatch: '#cc00ff', unlock: 38,
-    vars: { '--red':'#cc00ff','--yellow':'#ff00aa','--cyan':'#aa00ff','--green':'#ff44cc','--purple':'#7700ff','--orange':'#ff0088','--panel':'#05000f','--border':'#1a0030' }
-  },
-  {
-    id: 'gold', name: 'GOLD', swatch: '#ffe500', unlock: 55,
-    vars: { '--red':'#ffe500','--yellow':'#ffaa00','--cyan':'#fff0a0','--green':'#ffd700','--purple':'#ffcc00','--orange':'#ff8800','--panel':'#0a0800','--border':'#1a1400' }
-  },
-  {
-    id: 'ghost', name: 'GHOST', swatch: '#aaaacc', unlock: 80,
-    vars: { '--red':'#ffffff','--yellow':'#ccccff','--cyan':'#aaaadd','--green':'#ddddff','--purple':'#9999cc','--orange':'#bbbbee','--panel':'#050508','--border':'#111118' }
-  },
+  { id:'default', name:'PANIC',  swatch:'#ff1133', unlock:0,  vars:{} },
+  { id:'cyber',   name:'CYBER',  swatch:'#00eeff', unlock:10,
+    vars:{'--red':'#00eeff','--yellow':'#cc00ff','--cyan':'#2dff00','--green':'#ffe500','--purple':'#ff5500','--orange':'#ff1133','--panel':'#020a10','--border':'#001a22'} },
+  { id:'toxic',   name:'TOXIC',  swatch:'#2dff00', unlock:22,
+    vars:{'--red':'#2dff00','--yellow':'#aaff00','--cyan':'#00ffaa','--green':'#ffffff','--purple':'#ccff00','--orange':'#88ff00','--panel':'#030a00','--border':'#0a2000'} },
+  { id:'void',    name:'VOID',   swatch:'#cc00ff', unlock:38,
+    vars:{'--red':'#cc00ff','--yellow':'#ff00aa','--cyan':'#aa00ff','--green':'#ff44cc','--purple':'#7700ff','--orange':'#ff0088','--panel':'#05000f','--border':'#1a0030'} },
+  { id:'gold',    name:'GOLD',   swatch:'#ffe500', unlock:55,
+    vars:{'--red':'#ffe500','--yellow':'#ffaa00','--cyan':'#fff0a0','--green':'#ffd700','--purple':'#ffcc00','--orange':'#ff8800','--panel':'#0a0800','--border':'#1a1400'} },
+  { id:'ghost',   name:'GHOST',  swatch:'#aaaacc', unlock:80,
+    vars:{'--red':'#ffffff','--yellow':'#ccccff','--cyan':'#aaaadd','--green':'#ddddff','--purple':'#9999cc','--orange':'#bbbbee','--panel':'#050508','--border':'#111118'} },
 ];
 
-let activeTheme = localStorage.getItem('pb_theme') || 'default';
-let unlockedThemes = JSON.parse(localStorage.getItem('pb_themes_unlocked') || '["default"]');
+let activeTheme     = localStorage.getItem('pb_theme') || 'default';
+let unlockedThemes  = JSON.parse(localStorage.getItem('pb_themes_unlocked') || '["default"]');
 
 function applyTheme(id) {
   const theme = THEMES.find(t => t.id === id) || THEMES[0];
   activeTheme = id;
   localStorage.setItem('pb_theme', id);
   const root = document.documentElement;
-  // Reset all theme vars first
   THEMES.forEach(t => Object.keys(t.vars).forEach(k => root.style.removeProperty(k)));
-  // Apply selected theme vars
   Object.entries(theme.vars).forEach(([k, v]) => root.style.setProperty(k, v));
 }
 
 function checkThemeUnlocks(score) {
-  let newUnlock = false;
+  let newUnlock = null;
   THEMES.forEach(t => {
     if (score >= t.unlock && !unlockedThemes.includes(t.id)) {
       unlockedThemes.push(t.id);
@@ -100,21 +102,12 @@ function pickTheme(id) {
 // ══════════════════════════════════════
 //  MODULAR ROUND SYSTEM
 // ══════════════════════════════════════
-// Each round is a self-contained config object.
-// Custom packs are stored in localStorage and can be exported/imported as JSON.
+const ROUND_SCHEMA = { required: ['text','type','col'] };
 
-const ROUND_SCHEMA = {
-  // Required fields every round must have
-  required: ['text','type','col'],
-  // Optional: hint, tutMsg, platform ('desktop'|'mobile'|'both')
-};
-
-// Convert legacy flat arrays into modular round objects with metadata
 function makeRound(text, type, col, hint = '', platform = 'both') {
   return { text, type, col, hint, platform, _builtin: true };
 }
 
-// Built-in round packs (converted from old INSTS_DESKTOP / INSTS_MOBILE)
 const PACK_DESKTOP_BUILTIN = [
   makeRound('CLICK NOW',       'click',       'cr',  'click the button',  'desktop'),
   makeRound("DON'T CLICK",     'wait',        'cy',  'hands off!',        'desktop'),
@@ -206,7 +199,7 @@ function importPackFromJSON(jsonStr) {
     if (!ok) return { ok: false, err };
     const packs = loadCustomPacks();
     const existing = packs.findIndex(p => p.name === pack.name);
-    if (existing >= 0) packs[existing] = pack; // overwrite by name
+    if (existing >= 0) packs[existing] = pack;
     else packs.push(pack);
     saveCustomPacks(packs);
     return { ok: true, pack };
@@ -216,7 +209,6 @@ function importPackFromJSON(jsonStr) {
 }
 
 function getActiveRounds() {
-  // Merge builtin + any active custom packs
   const base   = isMobile ? PACK_MOBILE_BUILTIN : PACK_DESKTOP_BUILTIN;
   const packs  = loadCustomPacks().filter(p => p.active);
   const custom = packs.flatMap(p => p.rounds);
@@ -227,13 +219,11 @@ function getActiveRounds() {
 function openRoundEditor() {
   const existing = document.getElementById('round-editor-screen');
   if (existing) { existing.classList.remove('off'); return; }
-
   const el = document.createElement('div');
   el.id        = 'round-editor-screen';
   el.className = 'screen';
   el.innerHTML = buildEditorHTML();
   document.getElementById('cab').appendChild(el);
-  bindEditorEvents(el);
 }
 
 function closeRoundEditor() {
@@ -256,10 +246,9 @@ function buildEditorHTML() {
       <button class="editor-close" onclick="closeRoundEditor()">✕</button>
     </div>
     <div class="editor-body">
-      <!-- NEW ROUND FORM -->
       <div class="editor-section">
         <div class="editor-sec-title">NEW ROUND</div>
-        <input  id="ed-text"  class="editor-input" placeholder="Instruction text (e.g. TAP NOW!)" maxlength="28">
+        <input  id="ed-text"  class="editor-input" placeholder="Instruction text (e.g. TAP NOW!)" maxlength="28" autocomplete="off">
         <select id="ed-type"  class="editor-select">
           ${VALID_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
         </select>
@@ -268,12 +257,11 @@ function buildEditorHTML() {
           <option value="cy2">YELLOW</option><option value="cg">GREEN</option>
           <option value="cp">PURPLE</option><option value="co">ORANGE</option>
         </select>
-        <input  id="ed-hint"  class="editor-input" placeholder="Hint (optional)" maxlength="32">
+        <input  id="ed-hint"  class="editor-input" placeholder="Hint (optional)" maxlength="32" autocomplete="off">
       </div>
-      <!-- PACK MANAGER -->
       <div class="editor-section">
         <div class="editor-sec-title">PACKS</div>
-        <input id="ed-pack-name" class="editor-input" placeholder="Pack name">
+        <input id="ed-pack-name" class="editor-input" placeholder="Pack name" autocomplete="off">
         <div class="editor-btns">
           <button class="editor-btn" onclick="editorSaveRound()">+ ADD TO PACK</button>
           <button class="editor-btn" onclick="editorExportPack()">⬇ EXPORT</button>
@@ -307,15 +295,11 @@ function buildPackListHTML() {
   `).join('');
 }
 
-function bindEditorEvents(el) {
-  // nothing extra needed — all onclick handlers are global functions
-}
-
 function editorStatus(msg, ok = true) {
   const el = document.getElementById('ed-status');
   if (!el) return;
-  el.textContent  = msg;
-  el.className    = 'editor-status ' + (ok ? 'ok' : 'err');
+  el.textContent = msg;
+  el.className   = 'editor-status ' + (ok ? 'ok' : 'err');
   setTimeout(() => { el.textContent = ''; el.className = 'editor-status'; }, 2500);
 }
 
@@ -325,23 +309,20 @@ function editorSaveRound() {
   const col      = document.getElementById('ed-col')?.value;
   const hint     = document.getElementById('ed-hint')?.value.trim();
   const packName = document.getElementById('ed-pack-name')?.value.trim() || 'My Pack';
-
   if (!text) { editorStatus('Enter instruction text', false); return; }
-
   const round = makeRound(text, type, col, hint, isMobile ? 'mobile' : 'desktop');
   delete round._builtin;
-
   const packs = loadCustomPacks();
   let pack = packs.find(p => p.name === packName);
   if (!pack) { pack = { name: packName, active: true, rounds: [] }; packs.push(pack); }
   pack.rounds.push(round);
   saveCustomPacks(packs);
-
-  // Refresh pack list
   const listEl = document.getElementById('ed-pack-list');
   if (listEl) listEl.innerHTML = buildPackListHTML();
-  document.getElementById('ed-text').value = '';
-  document.getElementById('ed-hint').value = '';
+  const textEl = document.getElementById('ed-text');
+  const hintEl = document.getElementById('ed-hint');
+  if (textEl) textEl.value = '';
+  if (hintEl) hintEl.value = '';
   editorStatus(`✓ Added "${text}" to ${packName}`);
 }
 
@@ -390,15 +371,14 @@ function editorImportFile(input) {
   reader.readAsText(file);
 }
 
-
 // ══════════════════════════════════════
 //  VIBRATION
 // ══════════════════════════════════════
-function vib(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} }
-function vibOK()     { vib(30); }
-function vibWrong()  { vib([60, 30, 120]); }
-function vibCombo()  { vib([20, 20, 40]); }
-function vibLastCh() { vib([100, 50, 100, 50, 200]); }
+function vib(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {} }
+function vibOK()    { vib(30); }
+function vibWrong() { vib([60, 30, 120]); }
+function vibCombo() { vib([20, 20, 40]); }
+function vibLastCh(){ vib([100, 50, 100, 50, 200]); }
 
 // ══════════════════════════════════════
 //  BACKGROUND CANVAS
@@ -411,14 +391,12 @@ function resizeBG() { BW = bgCvs.width = innerWidth; BH = bgCvs.height = innerHe
 resizeBG();
 addEventListener('resize', resizeBG);
 
-const PCOLS = ['#ff1133', '#00eeff', '#cc00ff', '#2dff00', '#ffe500', '#ff5500'];
+const PCOLS = ['#ff1133','#00eeff','#cc00ff','#2dff00','#ffe500','#ff5500'];
 const pts = Array.from({ length: 70 }, () => ({
-  x:     Math.random() * 2000,
-  y:     Math.random() * 2000,
-  vx:    (Math.random() - .5) * .22,
-  vy:    (Math.random() - .5) * .22,
-  r:     Math.random() * 1.5 + .4,
-  col:   PCOLS[Math.floor(Math.random() * PCOLS.length)],
+  x: Math.random() * 2000, y: Math.random() * 2000,
+  vx: (Math.random() - .5) * .22, vy: (Math.random() - .5) * .22,
+  r: Math.random() * 1.5 + .4,
+  col: PCOLS[Math.floor(Math.random() * PCOLS.length)],
   phase: Math.random() * Math.PI * 2,
 }));
 
@@ -430,7 +408,6 @@ function drawBG() {
   requestAnimationFrame(drawBG);
   bgCtx.clearRect(0, 0, BW, BH);
   const spd = 1 + bgIntensity * 6;
-
   for (const p of pts) {
     p.x += p.vx * spd; p.y += p.vy * spd; p.phase += .01 * spd;
     if (p.x < 0) p.x = BW; if (p.x > BW) p.x = 0;
@@ -441,13 +418,11 @@ function drawBG() {
     bgCtx.fillStyle = p.col + Math.floor(a * 255).toString(16).padStart(2, '0');
     bgCtx.fill();
   }
-
   ekgPhase += (.02 + ekgPanic * .08) * spd;
   for (let i = EKG_LEN - 1; i > 0; i--) ekgPts[i] = ekgPts[i - 1];
   ekgPts[0] = (Math.sin(ekgPhase * 3) > .94)
     ? (Math.sin(ekgPhase * 30) * 40 * ekgPanic)
     : Math.sin(ekgPhase) * 4 * ekgPanic;
-
   if (ekgPanic > .1) {
     const ex = BW * .5 - EKG_LEN * 3, ey = BH - 40;
     bgCtx.beginPath();
@@ -477,7 +452,7 @@ function drawCorrupt() {
   for (let i = 0; i < n; i++) {
     const x = Math.random() * 440, y = Math.random() * 780;
     const w = Math.random() * 90 + 10, h = Math.random() * 5 + 2;
-    corCtx.fillStyle = `rgba(${Math.floor(Math.random() * 255)},0,${Math.floor(Math.random() * 255)},${corruptLevel * .28})`;
+    corCtx.fillStyle = `rgba(${Math.floor(Math.random()*255)},0,${Math.floor(Math.random()*255)},${corruptLevel*.28})`;
     corCtx.fillRect(x, y, w, h);
   }
 }
@@ -495,15 +470,19 @@ function getAC() {
   return AC;
 }
 
+// FIX: sync ALL mute buttons (both start-screen and game)
+function syncMuteButtons() {
+  document.querySelectorAll('.mute-btn').forEach(el => {
+    el.textContent = isMuted ? '🔇' : '🔊';
+    el.title       = isMuted ? 'Unmute' : 'Mute';
+    el.classList.toggle('muted', isMuted);
+  });
+}
+
 function toggleMute() {
   isMuted = !isMuted;
   localStorage.setItem('pb_muted', isMuted ? '1' : '0');
-  // Update every mute button in the DOM
-  document.querySelectorAll('.mute-btn').forEach(el => {
-    el.textContent   = isMuted ? '🔇' : '🔊';
-    el.title         = isMuted ? 'Unmute' : 'Mute';
-    el.classList.toggle('muted', isMuted);
-  });
+  syncMuteButtons();
 }
 
 function beep(f, t, d, v, delay = 0) {
@@ -517,7 +496,7 @@ function beep(f, t, d, v, delay = 0) {
     g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + delay + d);
     o.start(ctx.currentTime + delay);
     o.stop(ctx.currentTime + delay + d + .02);
-  } catch (e) {}
+  } catch(e) {}
 }
 
 function noise(d = .05, v = .2, delay = 0) {
@@ -531,7 +510,7 @@ function noise(d = .05, v = .2, delay = 0) {
     g.gain.setValueAtTime(v, ctx.currentTime + delay);
     g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + delay + d);
     src.start(ctx.currentTime + delay);
-  } catch (e) {}
+  } catch(e) {}
 }
 
 const S = {
@@ -549,6 +528,10 @@ const S = {
   rank:   () => { beep(440,'sine',.06,.2); beep(554,'sine',.06,.2,.07); beep(659,'sine',.07,.2,.14); beep(880,'sine',.12,.22,.21); },
   lastch: () => { noise(.12,.4); beep(160,'sawtooth',.2,.4); beep(100,'sawtooth',.25,.35,.18); },
   sbr:    () => { noise(.15,.5); beep(100,'sawtooth',.2,.5); beep(60,'sawtooth',.3,.4,.15); },
+  cd3:    () => { beep(660,'sine',.07,.2); },
+  cd2:    () => { beep(740,'sine',.07,.2); },
+  cd1:    () => { beep(880,'sine',.07,.22); },
+  cdgo:   () => { beep(1100,'sine',.05,.3); beep(1320,'sine',.06,.28,.06); beep(1540,'sine',.08,.25,.12); noise(.04,.15,.1); },
 };
 
 let hbTO = null;
@@ -559,7 +542,7 @@ function startHB(dur) {
   function beat() {
     if (!gameActive) return;
     e++;
-    const pct  = Math.max(0, 1 - e / (dur / 100));
+    const pct = Math.max(0, 1 - e / (dur / 100));
     if (pct < .4) {
       S.hb();
       hbEl.classList.remove('pulse');
@@ -600,57 +583,13 @@ const FAIL_MSGS   = [
   "Incredible. Incredibly bad.",
 ];
 
-// ── INSTRUCTION SETS (desktop vs mobile) ──
-const INSTS_DESKTOP = [
-  { text: 'CLICK NOW',       type: 'click',       col: 'cr',  hint: 'click the button' },
-  { text: "DON'T CLICK",     type: 'wait',         col: 'cy',  hint: 'hands off!' },
-  { text: 'PRESS SPACE',     type: 'space',        col: 'cy2', hint: 'hit spacebar' },
-  { text: 'PRESS ENTER',     type: 'enter',        col: 'cg',  hint: 'hit enter' },
-  { text: 'DOUBLE CLICK',    type: 'dblclick',     col: 'co',  hint: 'click twice fast' },
-  { text: 'WAIT FOR IT…',    type: 'wait',         col: 'cp',  hint: 'do nothing' },
-  { text: 'HIT IT!',         type: 'click',        col: 'cr',  hint: 'click it' },
-  { text: 'RIGHT CLICK',     type: 'rightclick',   col: 'cp',  hint: 'right mouse btn' },
-  { text: 'MOVE MOUSE FAST', type: 'move',         col: 'cy',  hint: 'shake it!' },
-  { text: 'HOLD SPACE',      type: 'hold_space',   col: 'co',  hint: 'hold 400ms' },
-  { text: 'PRESS A',         type: 'key_a',        col: 'cg',  hint: 'press A key' },
-  { text: 'STAY STILL',      type: 'wait',         col: 'cp',  hint: 'freeze' },
-  { text: 'SMASH IT!',       type: 'click',        col: 'cr',  hint: 'click it' },
-  { text: "DON'T MOVE",      type: 'wait',         col: 'cy',  hint: 'freeze' },
-  { text: 'NOW!!!',          type: 'click',        col: 'cr',  hint: 'click it' },
-  { text: 'PRESS ESCAPE',    type: 'key_escape',   col: 'co',  hint: 'press ESC' },
-  { text: 'CLICK TWICE',     type: 'dblclick',     col: 'cy2', hint: 'double-click' },
-  { text: 'HANDS OFF!',      type: 'wait',         col: 'cy',  hint: 'nothing' },
-  { text: 'TAP IT!',         type: 'click',        col: 'cr',  hint: 'click it' },
-  { text: 'FREEZE!',         type: 'wait',         col: 'cp',  hint: 'stay still' },
-  { text: 'TRIPLE CLICK',    type: 'tripleclick',  col: 'co',  hint: '3 rapid clicks' },
-];
-
-const INSTS_MOBILE = [
-  { text: 'TAP NOW!',         type: 'click',        col: 'cr',  hint: 'tap the button' },
-  { text: "DON'T TAP",        type: 'wait',         col: 'cy',  hint: 'hands off!' },
-  { text: 'DOUBLE TAP',       type: 'dblclick',     col: 'co',  hint: 'tap twice fast' },
-  { text: 'WAIT FOR IT…',     type: 'wait',         col: 'cp',  hint: 'do nothing' },
-  { text: 'HIT IT!',          type: 'click',        col: 'cr',  hint: 'tap it' },
-  { text: 'HOLD THE BUTTON',  type: 'hold_btn',     col: 'co',  hint: 'hold 500ms' },
-  { text: 'STAY STILL',       type: 'wait',         col: 'cp',  hint: 'freeze' },
-  { text: 'SMASH IT!',        type: 'click',        col: 'cr',  hint: 'tap it' },
-  { text: "DON'T TOUCH",      type: 'wait',         col: 'cy',  hint: 'freeze' },
-  { text: 'NOW!!!',           type: 'click',        col: 'cr',  hint: 'tap it' },
-  { text: 'SWIPE UP',         type: 'swipe_up',     col: 'cg',  hint: 'swipe up on screen' },
-  { text: 'SWIPE DOWN',       type: 'swipe_down',   col: 'cy2', hint: 'swipe down' },
-  { text: 'TRIPLE TAP',       type: 'tripleclick',  col: 'co',  hint: 'tap 3 times fast' },
-  { text: 'FREEZE!',          type: 'wait',         col: 'cp',  hint: 'stay still' },
-  { text: 'TAP TWICE',        type: 'dblclick',     col: 'cy2', hint: 'two taps' },
-  { text: 'HOLD IT!',         type: 'hold_btn',     col: 'co',  hint: 'hold the button' },
-  { text: 'RESIST!',          type: 'wait',         col: 'cp',  hint: 'do NOT tap' },
-  { text: 'GO GO GO!',        type: 'click',        col: 'cr',  hint: 'tap it NOW' },
-  { text: 'SWIPE LEFT',       type: 'swipe_left',   col: 'cp',  hint: 'swipe left' },
-  { text: 'SWIPE RIGHT',      type: 'swipe_right',  col: 'cy2', hint: 'swipe right' },
-];
+// NOTE: INSTS_DESKTOP / INSTS_MOBILE removed in v3 — they were dead code
+// duplicating PACK_DESKTOP_BUILTIN / PACK_MOBILE_BUILTIN. INSTS is now
+// set from getActiveRounds() (which uses PACK_*_BUILTIN) in startGame().
 
 const FRENZY_DESKTOP = [
   { text: 'CLICK!', type: 'click', col: 'cr' }, { text: 'WAIT!',  type: 'wait',  col: 'cy' },
-  { text: 'SPACE!', type: 'space', col: 'cy2'},  { text: 'SMASH!', type: 'click', col: 'cr' },
+  { text: 'SPACE!', type: 'space', col: 'cy2'}, { text: 'SMASH!', type: 'click', col: 'cr' },
   { text: "DON'T!", type: 'wait',  col: 'cp' }, { text: 'HIT!',   type: 'click', col: 'cr' },
   { text: 'STOP!',  type: 'wait',  col: 'cy' }, { text: 'GO!!',   type: 'click', col: 'cr' },
 ];
@@ -666,7 +605,7 @@ let INSTS, FRENZY_INSTS;
 
 const BTN_LBLS = {
   click:       ['PANIC!', 'TAP ME!', 'HIT IT!', 'SMASH!', 'GO!', 'DO IT!', 'NOW!'],
-  wait:        ["NO TOUCH", "WAIT...", "DON'T!", "STOP!", "RESIST!", "FREEZE!", "NOPE!"],
+  wait:        ["NO TOUCH","WAIT...","DON'T!","STOP!","RESIST!","FREEZE!","NOPE!"],
   dblclick:    ['DOUBLE!', 'TAP×2', 'TWICE!'],
   tripleclick: ['×3', 'THREE!', 'TRIPLE!'],
   rightclick:  ['R-CLICK', 'RIGHT ME', 'ALT-CLICK'],
@@ -701,17 +640,16 @@ function getRank(s) {
 // ══════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════
-// ── TRAINING & HOT SEAT flags (declared early to avoid TDZ issues) ──
-let trainingMode     = false;
-let hsMode   = false;
-let hsPlayer = 1;
+let trainingMode   = false;
+let hsMode         = false;
+let hsPlayer       = 1;
 let hsRoundsPlayed = 0;
-let hsScores = [0, 0];
-let hsLives  = [3, 3];
-let hsReactTimes = [[], []];
+let hsScores       = [0, 0];
+let hsLives        = [3, 3];
+let hsReactTimes   = [[], []];
 
 let score = 0, bestScore = +(localStorage.getItem('pb_best') || 0);
-let bestScoreDate = localStorage.getItem('pb_best_date') || null; // ISO timestamp
+let bestScoreDate = localStorage.getItem('pb_best_date') || null;
 let lives = 3, gameActive = false, roundEnded = false;
 let timerRAF = null, timerStart = 0, timerDur = 2000;
 let curInst = null, prevInst = null;
@@ -726,9 +664,38 @@ let isFrenzy = false, frenzyCount = 0, frenzyDone = 0;
 let dblGuard = false, tripleCount = 0, tripleTO = null;
 let nearMissShown = false, lastPctVal = 1;
 
-// ── REACTION TIME TRACKING ──
-let reactTimes = [];
+let reactTimes     = [];
 let roundActionStart = 0;
+let totalRounds    = 0;
+let hitRounds      = 0;
+let missRounds     = 0;
+
+// ── ALL-TIME STATS ──
+const ALLTIME_KEY = 'pb_alltime_stats';
+function loadAllTimeStats() {
+  try { return JSON.parse(localStorage.getItem(ALLTIME_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveAllTimeStats(patch) {
+  const s = loadAllTimeStats();
+  Object.assign(s, patch);
+  localStorage.setItem(ALLTIME_KEY, JSON.stringify(s));
+}
+function recordGameToAllTime(sc, rts, hits, misses) {
+  const s = loadAllTimeStats();
+  s.gamesPlayed = (s.gamesPlayed  || 0) + 1;
+  s.totalScore  = (s.totalScore   || 0) + sc;
+  s.bestScore   = Math.max(s.bestScore || 0, sc);
+  s.totalHits   = (s.totalHits    || 0) + hits;
+  s.totalMisses = (s.totalMisses  || 0) + misses;
+  if (rts.length) {
+    const minRT = Math.min(...rts);
+    s.bestRT  = s.bestRT ? Math.min(s.bestRT, minRT) : minRT;
+    const allRT = (s.allRTs || []).concat(rts).slice(-200);
+    s.allRTs  = allRT;
+  }
+  localStorage.setItem(ALLTIME_KEY, JSON.stringify(s));
+}
 
 // ══════════════════════════════════════
 //  CHALLENGE MODES
@@ -736,7 +703,6 @@ let roundActionStart = 0;
 const MODES = ['classic','sprint','zen','daily'];
 let currentMode = 'classic';
 
-// Per-mode best scores
 const modeBest = {
   classic: +(localStorage.getItem('pb_best')        || 0),
   sprint:  +(localStorage.getItem('pb_best_sprint')  || 0),
@@ -750,11 +716,9 @@ const modeBestDate = {
   daily:   localStorage.getItem('pb_best_date_daily')   || null,
 };
 
-// Sprint mode
-const SPRINT_DURATION = 30000; // 30 seconds in ms
+const SPRINT_DURATION = 30000;
 let sprintEndTime = 0, sprintRAF = null;
 
-// Daily mode — seed from today's date (YYYYMMDD)
 function getDailySeed() {
   const d = new Date();
   return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
@@ -765,7 +729,6 @@ function getDailyNum() {
   return Math.floor((now - start) / 86400000) + 1;
 }
 
-// Seeded random (mulberry32)
 function makeSeededRand(seed) {
   let s = seed;
   return function() {
@@ -776,10 +739,9 @@ function makeSeededRand(seed) {
   };
 }
 
-let seededR = null; // set to seededRand in daily mode, null otherwise
-let dailyRoundLog = []; // 'hit' | 'miss' | 'frenzy' per round for share grid
+let seededR = null;
+let dailyRoundLog = [];
 
-// Daily already played today?
 function dailyAlreadyPlayed() {
   return localStorage.getItem('pb_daily_date') === String(getDailySeed());
 }
@@ -791,17 +753,31 @@ function saveDailyResult(sc) {
 }
 
 function selectMode(mode) {
-  currentMode = mode;
-  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  // Update best panel
+  currentMode   = mode;
   bestScore     = modeBest[mode];
   bestScoreDate = modeBestDate[mode];
+  document.querySelectorAll('.mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === mode)
+  );
   const hsNum  = document.getElementById('hs-num');
   const hsDate = document.getElementById('hs-date');
   const hsLbl  = document.getElementById('hs-lbl');
   if (hsNum)  hsNum.textContent  = modeBest[mode];
   if (hsDate) hsDate.textContent = modeBestDate[mode] ? timeAgo(modeBestDate[mode]) : '';
-  if (hsLbl)  hsLbl.textContent  = mode === 'daily' ? (dailyAlreadyPlayed() ? '✓ Played Today' : 'Best Score') : 'Best Score';
+  if (hsLbl)  hsLbl.textContent  = (mode === 'daily' && dailyAlreadyPlayed()) ? '✓ Played Today' : 'Best Score';
+  // FIX v3: tint the start button for daily if already played
+  const startBtn = document.getElementById('btn-start');
+  if (startBtn) {
+    if (mode === 'daily' && dailyAlreadyPlayed()) {
+      startBtn.textContent = 'PLAY AGAIN';
+      startBtn.style.borderColor = 'var(--yellow)';
+      startBtn.style.color = 'var(--yellow)';
+    } else {
+      startBtn.textContent = 'PLAY';
+      startBtn.style.borderColor = '';
+      startBtn.style.color = '';
+    }
+  }
 }
 
 function saveModeScore(sc) {
@@ -812,11 +788,10 @@ function saveModeScore(sc) {
     modeBestDate[currentMode] = new Date().toISOString();
     localStorage.setItem(key,     String(sc));
     localStorage.setItem(dateKey, modeBestDate[currentMode]);
-    // keep legacy pb_best in sync for classic
     if (currentMode === 'classic') {
       bestScore = sc; bestScoreDate = modeBestDate[currentMode];
     }
-    return true; // new best
+    return true;
   }
   return false;
 }
@@ -826,7 +801,7 @@ function saveModeScore(sc) {
 // ══════════════════════════════════════
 function g(id) { return document.getElementById(id); }
 
-const cab        = g('cab'),        flashOv    = g('flash'),      frRing  = g('fr-ring');
+const cab        = g('cab'),        flashOv    = g('flash'),      frRing   = g('fr-ring');
 const spBan      = g('sp-ban'),     bigMult    = g('big-mult'),   ptsFloat = g('pts-float');
 const lcOv       = g('lc-ov'),      lcTxt      = g('lc-txt');
 const scrStart   = g('scr-start'),  scrGO      = g('scr-go');
@@ -842,17 +817,22 @@ const holdRingEl = g('hold-ring'),  hrFill     = g('hr-fill'),   swipeArrow = g(
 const lifeEls    = [0, 1, 2].map(i => g('lf' + i));
 const goScore    = g('go-score'),   goBest     = g('go-best'),   goMsg  = g('go-msg');
 const goRank     = g('go-rank'),    goDied     = g('go-died'),   goNB   = g('go-nb');
-const hsNum      = g('hs-num');
-const reactSval  = g('react-sval'), goReact    = g('go-react'),  reactBD = g('react-breakdown');
-const sprintBadge = g('sprint-badge'), sprintTimeEl = g('sprint-time');
-const dailyResultEl = g('daily-result'), dailyNumEl = g('daily-num'), dailyGridEl = g('daily-grid');
-const shareCanvas = g('share-canvas');
+// FIX: null-safe references — these may be absent depending on context
+const reactSval  = g('react-sval');
+const goReact    = g('go-react');
+const reactBD    = g('react-breakdown');
+const sprintBadge   = g('sprint-badge');
+const sprintTimeEl  = g('sprint-time');
+const dailyResultEl = g('daily-result');
+const dailyNumEl    = g('daily-num');
+const dailyGridEl   = g('daily-grid');
+const shareCanvas   = g('share-canvas');
 
-// ── TUTORIAL & START-SCREEN TAUNT ──
-let isFirstGame = !localStorage.getItem('pb_played');
-let tutorialStep = 0;
+// ── TUTORIAL & START TAUNT ──
+let isFirstGame   = !localStorage.getItem('pb_played');
+let tutorialStep  = 0;
 const TUTORIAL_STEPS = [
-  { text: isMobile ? 'TAP NOW!' : 'CLICK NOW', type: 'click',  hint: isMobile ? '→ tap the big button' : '→ click the button', tutMsg: 'Welcome! When you see this, click the button.' },
+  { text: isMobile ? 'TAP NOW!' : 'CLICK NOW', type: 'click',   hint: isMobile ? '→ tap the big button' : '→ click the button', tutMsg: 'Welcome! When you see this, click the button.' },
   { text: isMobile ? "DON'T TAP" : "DON'T CLICK", type: 'wait', hint: '→ do NOTHING',  tutMsg: 'Now wait — do NOT touch anything!' },
   { text: isMobile ? 'DOUBLE TAP' : 'DOUBLE CLICK', type: 'dblclick', hint: isMobile ? '→ tap twice fast' : '→ click twice fast', tutMsg: 'Two taps/clicks in quick succession.' },
 ];
@@ -865,12 +845,13 @@ function showStartTaunt() {
     el.classList.add('show');
   }
 }
-// ══════════════════════════════════════
+
 function fillTips() {
   const grid = g('tips-grid');
+  if (!grid) return;
   const tips = isMobile
-    ? ["TAP IT", "DON'T TAP", "DOUBLE TAP", "HOLD BUTTON", "SWIPE UP", "SWIPE DOWN", "STAY STILL", "TRIPLE TAP"]
-    : ["CLICK IT", "DON'T CLICK", "DOUBLE-CLICK", "HOLD SPACE", "PRESS ENTER", "MOVE MOUSE", "RIGHT-CLICK", "STAY STILL"];
+    ? ["TAP IT","DON'T TAP","DOUBLE TAP","HOLD BUTTON","SWIPE UP","SWIPE DOWN","STAY STILL","TRIPLE TAP"]
+    : ["CLICK IT","DON'T CLICK","DOUBLE-CLICK","HOLD SPACE","PRESS ENTER","MOVE MOUSE","RIGHT-CLICK","STAY STILL"];
   grid.innerHTML = tips.map(t => `<div class="tip">${t}</div>`).join('');
 }
 
@@ -882,7 +863,6 @@ const rand = a => {
   return a[Math.floor(r * a.length)];
 };
 
-// Track last 3 instructions to prevent repetitive back-to-back picks
 const recentInsts = [];
 function pick(a) {
   const filtered = a.filter(i => !recentInsts.includes(i));
@@ -911,11 +891,13 @@ function updateBestDateUI() {
 }
 
 function updateScoreUI() {
-  svalEl.textContent   = score;
-  bestSval.textContent = modeBest[currentMode];
-  rankLbl.textContent  = getRank(score);
-  svalEl.classList.add('pop');
-  setTimeout(() => svalEl.classList.remove('pop'), 170);
+  if (svalEl)   svalEl.textContent   = score;
+  if (bestSval) bestSval.textContent = modeBest[currentMode];
+  if (rankLbl)  rankLbl.textContent  = getRank(score);
+  if (svalEl) {
+    svalEl.classList.add('pop');
+    setTimeout(() => svalEl.classList.remove('pop'), 170);
+  }
   bgIntensity  = Math.min(score / 32, 1);
   corruptLevel = Math.max(0, (score - 25) / 30);
   updateBestDateUI();
@@ -923,7 +905,7 @@ function updateScoreUI() {
 }
 
 function updateLives() {
-  if (currentMode === 'zen' || (trainingMode)) {
+  if (currentMode === 'zen' || trainingMode) {
     lifeEls.forEach(el => { el.textContent = '∞'; el.classList.remove('lost'); el.style.display = ''; });
     const lbl = document.getElementById('lives-lbl');
     if (lbl) { lbl.textContent = 'Zen'; lbl.style.display = ''; }
@@ -945,13 +927,13 @@ function updateLives() {
 
 function updateStreak() {
   const pct = Math.min(streak / STREAK_BONUS_AT, 1) * 100;
-  stkFill.style.width = pct + '%';
-  stkVal.textContent  = streak;
+  if (stkFill) stkFill.style.width = pct + '%';
+  if (stkVal)  stkVal.textContent  = streak;
   const hot = streak >= STREAK_BONUS_AT;
-  stkFill.classList.toggle('hot', hot);
-  stkVal.classList.toggle('hot', hot);
+  if (stkFill) stkFill.classList.toggle('hot', hot);
+  if (stkVal)  stkVal.classList.toggle('hot', hot);
 
-  // Live multiplier preview
+  // FIX: use getElementById (not querySelector) to match element with id="mult-preview"
   const multEl = document.getElementById('mult-preview');
   if (multEl) {
     const m = calcMult();
@@ -963,6 +945,17 @@ function updateStreak() {
       multEl.classList.remove('active');
     }
   }
+}
+
+function updateAccPill() {
+  const el = document.getElementById('acc-pill');
+  if (!el) return;
+  if (totalRounds === 0) { el.textContent = '—'; el.className = 'acc-pill'; return; }
+  const pct = Math.round((hitRounds / totalRounds) * 100);
+  el.textContent = pct + '%';
+  if (pct < 60)      el.className = 'acc-pill bad';
+  else if (pct < 75) el.className = 'acc-pill warn';
+  else               el.className = 'acc-pill';
 }
 
 function doFlash(cls) {
@@ -981,38 +974,39 @@ function chromaOn()  { cab.classList.add('chroma'); }
 function chromaOff() { cab.classList.remove('chroma'); }
 
 function showFB(msg, cls) {
+  if (!feedbackEl) return;
   feedbackEl.textContent = msg;
   feedbackEl.className   = 'feedback show ' + cls;
-  setTimeout(() => feedbackEl.className = 'feedback', 850);
+  setTimeout(() => { if (feedbackEl) feedbackEl.className = 'feedback'; }, 850);
 }
 
 function floatPts(txt, ex, ey) {
+  if (!ptsFloat) return;
   const r = cab.getBoundingClientRect();
   ptsFloat.textContent = txt;
   ptsFloat.style.left  = (ex - r.left - 18) + 'px';
   ptsFloat.style.top   = (ey - r.top  - 18) + 'px';
   ptsFloat.className   = 'pts-float pop';
-  setTimeout(() => ptsFloat.className = 'pts-float', 850);
+  setTimeout(() => { if (ptsFloat) ptsFloat.className = 'pts-float'; }, 850);
 }
 
 function showMult(txt) {
+  if (!bigMult) return;
   bigMult.textContent = txt;
   bigMult.classList.remove('pop');
   void bigMult.offsetWidth;
   bigMult.classList.add('pop');
-  setTimeout(() => bigMult.classList.remove('pop'), 1150);
+  setTimeout(() => { if (bigMult) bigMult.classList.remove('pop'); }, 1150);
 }
 
 function showCombo(n) {
-  if (n < 2) return;
+  if (n < 2 || !comboLbl) return;
   comboLbl.textContent = n >= STREAK_BONUS_AT ? `🔥 ×${n} STREAK — BONUS!` : `🔥 STREAK ×${n}`;
   comboLbl.classList.remove('show');
   void comboLbl.offsetWidth;
   comboLbl.classList.add('show');
   if (n % STREAK_BONUS_AT === 0) { S.combo(); vibCombo(); }
-  setTimeout(() => comboLbl.classList.remove('show'), 1400);
-
-  // Hot seat rivalry taunts at key milestones
+  setTimeout(() => { if (comboLbl) comboLbl.classList.remove('show'); }, 1400);
   if (hsMode && n === 3) {
     const [s1, s2] = hsScores;
     const cur = hsPlayer === 1 ? s1 : s2;
@@ -1021,45 +1015,48 @@ function showCombo(n) {
     if (cur > opp)      pool = RIVALRY_TAUNTS_P1_AHEAD;
     else if (opp > cur) pool = RIVALRY_TAUNTS_P2_AHEAD;
     else                pool = RIVALRY_TAUNTS_TIED;
-    const t = document.getElementById('taunt');
-    if (t) {
-      t.textContent = rand(pool);
-      t.classList.add('hot');
-      setTimeout(() => { t.textContent = ''; t.classList.remove('hot'); }, 1800);
+    if (tauntEl) {
+      tauntEl.textContent = rand(pool);
+      tauntEl.classList.add('hot');
+      setTimeout(() => { if (tauntEl) { tauntEl.textContent = ''; tauntEl.classList.remove('hot'); } }, 1800);
     }
   }
 }
 
 function showNearMiss() {
+  if (!nearMissEl) return;
   nearMissEl.textContent = rand(['⚡ NEAR MISS!', '😬 CLOSE ONE…', '⏱ BARELY!']);
   nearMissEl.classList.remove('show');
   void nearMissEl.offsetWidth;
   nearMissEl.classList.add('show');
-  setTimeout(() => nearMissEl.classList.remove('show'), 1050);
+  setTimeout(() => { if (nearMissEl) nearMissEl.classList.remove('show'); }, 1050);
 }
 
 function showGlitch(txt) {
+  if (!glitchTxt) return;
   glitchTxt.textContent = txt;
   glitchTxt.classList.remove('show');
   void glitchTxt.offsetWidth;
   glitchTxt.classList.add('show');
-  setTimeout(() => glitchTxt.classList.remove('show'), 650);
+  setTimeout(() => { if (glitchTxt) glitchTxt.classList.remove('show'); }, 650);
 }
 
 function showLastChance() {
+  if (!lcTxt || !lcOv) return;
   lcTxt.textContent = 'LAST CHANCE';
   lcOv.classList.remove('show');
   void lcOv.offsetWidth;
   lcOv.classList.add('show');
   S.lastch(); vibLastCh();
-  setTimeout(() => lcOv.classList.remove('show'), 650);
+  setTimeout(() => { if (lcOv) lcOv.classList.remove('show'); }, 650);
 }
 
 function showSwipeArrow(dir) {
+  if (!swipeArrow) return;
   const arrows = { swipe_up: '⬆', swipe_down: '⬇', swipe_left: '⬅', swipe_right: '➡' };
   swipeArrow.textContent = arrows[dir] || '';
   swipeArrow.className   = 'swipe-arrow ' + dir.replace('swipe_', '');
-  setTimeout(() => swipeArrow.className = 'swipe-arrow', 850);
+  setTimeout(() => { if (swipeArrow) swipeArrow.className = 'swipe-arrow'; }, 850);
 }
 
 function startTaunt(dur) {
@@ -1067,12 +1064,12 @@ function startTaunt(dur) {
   const hot = dur < 900, pool = hot ? TAUNTS_HOT : TAUNTS_IDLE;
   const at  = dur * (.3 + Math.random() * .3);
   tauntTO = setTimeout(() => {
-    if (roundEnded) return;
+    if (roundEnded || !tauntEl) return;
     const pct = 1 - (performance.now() - timerStart) / timerDur;
     if (pct < .1) return;
     tauntEl.textContent = rand(pool);
     tauntEl.classList.toggle('hot', hot);
-    setTimeout(() => { tauntEl.textContent = ''; tauntEl.classList.remove('hot'); }, dur * .35);
+    setTimeout(() => { if (tauntEl) { tauntEl.textContent = ''; tauntEl.classList.remove('hot'); } }, dur * .35);
   }, at);
 }
 
@@ -1086,9 +1083,11 @@ function resetButton() {
 }
 
 function setInst(inst, anim = 'appear') {
+  if (!instEl) return;
   if (anim === 'leave') {
     instEl.classList.add('leaving');
     setTimeout(() => {
+      if (!instEl) return;
       instEl.textContent = inst.text;
       instEl.className   = 'inst ' + inst.col + ' appear';
       updateShapeInd();
@@ -1104,11 +1103,11 @@ function clearAllTimers() {
   cancelAnimationFrame(timerRAF);
   clearTimeout(waitTO); clearTimeout(switchTO);
   clearTimeout(holdTO); clearTimeout(tauntTO);
+  clearTimeout(tripleTO); tripleTO = null;         // FIX v3: was missing
   cancelAnimationFrame(holdRAF);
+  cancelAnimationFrame(mpRoundRAF);                // FIX v3: cancel mp timer too
   stopHB();
-  holdRingEl.classList.remove('show');
-  // Bug 6 fix: always disarm holdActive when clearing timers so that a keyup/touchend
-  // arriving after a timeout (roundEnded=true) cannot re-trigger handleWrong().
+  if (holdRingEl) holdRingEl.classList.remove('show');
   holdActive = false;
 }
 
@@ -1120,19 +1119,23 @@ const RING_CIRC = 113.1;
 
 function startHoldProgress() {
   holdProgress = 0;
-  holdRingEl.classList.add('show');
+  if (holdRingEl) holdRingEl.classList.add('show');
   const start = performance.now();
   function tick() {
     holdProgress = Math.min(1, (performance.now() - start) / HOLD_DUR);
-    hrFill.style.strokeDashoffset = (RING_CIRC * (1 - holdProgress)).toFixed(2);
+    if (hrFill) hrFill.style.strokeDashoffset = (RING_CIRC * (1 - holdProgress)).toFixed(2);
     if (holdProgress < 1 && holdActive) holdRAF = requestAnimationFrame(tick);
   }
   holdRAF = requestAnimationFrame(tick);
 }
 
 // ══════════════════════════════════════
-//  TIMER
+//  TIMER  (FIX: lastPctVal uses linearPct consistently)
 // ══════════════════════════════════════
+function easeTimerCurve(t) {
+  return Math.pow(t, 1.6);
+}
+
 function startTimer(dur) {
   clearAllTimers();
   timerDur   = dur;
@@ -1140,46 +1143,57 @@ function startTimer(dur) {
   roundEnded = false;
   mouseDist  = 0;
   nearMissShown = false;
-  lastPctVal    = 1;
+  lastPctVal    = 1;   // 1 = full time remaining
   swipeHandled  = false;
   touchMoved    = false;
   startHB(dur);
   startTaunt(dur);
 
   function tick() {
-    const el  = performance.now() - timerStart;
-    const pct = Math.max(0, 1 - el / dur);
-    const rem = Math.max(0, (dur - el) / 1000);
+    const elapsed   = performance.now() - timerStart;
+    const linear    = Math.min(1, elapsed / dur);
+    const curved    = easeTimerCurve(linear);
+    const barPct    = Math.max(0, 1 - curved);
+    const linearPct = Math.max(0, 1 - linear);  // percentage of time REMAINING (linear)
+    const rem       = Math.max(0, (dur - elapsed) / 1000);
 
-    tbarEl.style.width         = (pct * 100) + '%';
-    timerNumEl.textContent     = rem.toFixed(1) + 's';
+    if (tbarEl)     tbarEl.style.width         = (barPct * 100) + '%';
+    if (timerNumEl) timerNumEl.textContent      = rem.toFixed(1) + 's';
 
-    if (pct < .18) {
-      tbarEl.className    = 'timer-bar danger';
-      timerNumEl.className = 'timer-num danger';
+    if (linearPct < .18) {
+      if (tbarEl)     tbarEl.className     = 'timer-bar danger';
+      if (timerNumEl) timerNumEl.className = 'timer-num danger';
       chromaOn();
-      instEl.classList.add('jitter');
+      if (instEl) instEl.classList.add('jitter');
       if (curInst && curInst.type === 'click') pb.classList.add('danger-pulse');
-    } else if (pct < .45) {
-      tbarEl.className    = 'timer-bar warn';
-      timerNumEl.className = 'timer-num warn';
-      chromaOff(); instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+    } else if (linearPct < .45) {
+      if (tbarEl)     tbarEl.className     = 'timer-bar warn';
+      if (timerNumEl) timerNumEl.className = 'timer-num warn';
+      chromaOff();
+      if (instEl) instEl.classList.remove('jitter');
+      pb.classList.remove('danger-pulse');
     } else {
-      tbarEl.className    = 'timer-bar';
-      timerNumEl.className = 'timer-num';
-      chromaOff(); instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+      if (tbarEl)     tbarEl.className     = 'timer-bar';
+      if (timerNumEl) timerNumEl.className = 'timer-num';
+      chromaOff();
+      if (instEl) instEl.classList.remove('jitter');
+      pb.classList.remove('danger-pulse');
     }
 
-    if (!nearMissShown && pct < .13 && pct > .04 && curInst && curInst.type !== 'wait') {
+    // FIX: near miss and tick triggers use linearPct correctly
+    if (!nearMissShown && linearPct < .13 && linearPct > .04 && curInst && curInst.type !== 'wait') {
       nearMissShown = true; showNearMiss(); S.warn();
     }
-    if (lastPctVal >= .35 && pct < .35) S.tick();
-    lastPctVal = pct;
+    // FIX: lastPctVal compared against linearPct (was already correct, but ensure both sides match)
+    if (lastPctVal >= .35 && linearPct < .35) S.tick();
+    lastPctVal = linearPct;
 
-    if (el >= dur) {
-      tbarEl.style.width = '0%';
+    if (elapsed >= dur) {
+      if (tbarEl)     tbarEl.style.width = '0%';
+      if (tbarEl)     tbarEl.className   = 'timer-bar';
+      if (timerNumEl) timerNumEl.className = 'timer-num';
       chromaOff();
-      instEl.classList.remove('jitter');
+      if (instEl) instEl.classList.remove('jitter');
       pb.classList.remove('danger-pulse');
       handleTimeout();
     } else {
@@ -1190,33 +1204,109 @@ function startTimer(dur) {
 }
 
 // ══════════════════════════════════════
+//  GO HOME
+// ══════════════════════════════════════
+function goHome() {
+  gameActive = false; isFrenzy = false;
+  // FIX: always reset trainingMode and hsMode on home
+  trainingMode = false; hsMode = false;
+  clearAllTimers(); stopHB(); stopSprintTimer();
+  ekgPanic = 0; bgIntensity = 0; corruptLevel = 0;
+  chromaOff();
+  if (frRing) frRing.classList.remove('on');
+  if (scrGO)  scrGO.classList.add('off');
+  if (scrStart) scrStart.classList.remove('off');
+  ['handoff-ov','round-editor-screen','training-results','hs-split-results'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.contains('screen') ? el.classList.add('off') : el.remove();
+  });
+  // FIX: always hide the hs-hud and training-hud
+  const hud = document.getElementById('hs-hud');
+  if (hud) hud.classList.add('hidden');
+  const thud = document.getElementById('training-hud');
+  if (thud) thud.classList.add('hidden');
+  // Hide sprint badge
+  if (sprintBadge) sprintBadge.classList.add('hidden');
+  showStartTaunt();
+  updateBestDateUI();
+  const hsNumEl = document.getElementById('hs-num');
+  if (hsNumEl) hsNumEl.textContent = modeBest[currentMode];
+}
+
+// ══════════════════════════════════════
+//  COUNTDOWN
+// ══════════════════════════════════════
+let isFirstRoundOfGame = true;
+
+function playCountdown(cb) {
+  const ov  = document.getElementById('countdown-ov');
+  const num = document.getElementById('countdown-num');
+  const sub = document.getElementById('countdown-sub');
+  if (!ov || !isFirstRoundOfGame) { cb(); return; }
+  isFirstRoundOfGame = false;
+  ov.classList.add('show');
+  if (num) num.classList.remove('go');
+  if (sub) sub.textContent = 'GET READY';
+
+  const steps = [
+    { n: '3', sound: 'cd3', delay: 0 },
+    { n: '2', sound: 'cd2', delay: 700 },
+    { n: '1', sound: 'cd1', delay: 1400 },
+    { n: 'GO!', sound: 'cdgo', delay: 2050, isGo: true },
+  ];
+
+  steps.forEach(step => {
+    setTimeout(() => {
+      if (!gameActive || !num) return;
+      num.textContent = step.n;
+      if (step.isGo) { num.classList.add('go'); if (sub) sub.textContent = ''; }
+      else num.classList.remove('go');
+      num.style.animation = 'none';
+      void num.offsetWidth;
+      num.style.animation = '';
+      S[step.sound]?.();
+    }, step.delay);
+  });
+
+  setTimeout(() => {
+    ov.classList.remove('show');
+    cb();
+  }, 2550);
+}
+
+// ══════════════════════════════════════
 //  ROUND
 // ══════════════════════════════════════
 function startRound() {
+  if (!gameActive) return;
+  if (isFirstRoundOfGame) {
+    playCountdown(() => { if (gameActive) _doStartRound(); });
+    return;
+  }
+  _doStartRound();
+}
+
+function _doStartRound() {
   if (!gameActive) return;
   resetButton(); holdActive = false; holdDone = false;
   dblGuard = false; tripleCount = 0; clearTimeout(tripleTO);
   roundN++;
 
-  // ── Tutorial mode (first-ever game, steps 0-2) ──
   if (tutorialStep >= 0 && tutorialStep < TUTORIAL_STEPS.length) {
-    const ts   = TUTORIAL_STEPS[tutorialStep];
-    curInst    = ts;
-    specialRound = null;
-    const diff = { ms: 3500 }; // generous time for tutorial
-    diffPill.textContent = 'TUTORIAL'; diffPill.className = 'diff-pill dp-easy';
-    subInstEl.textContent = ts.hint;
+    const ts = TUTORIAL_STEPS[tutorialStep];
+    curInst  = ts; specialRound = null;
+    const diff = { ms: 3500 };
+    if (diffPill) { diffPill.textContent = 'TUTORIAL'; diffPill.className = 'diff-pill dp-easy'; }
+    if (subInstEl) subInstEl.textContent = ts.hint;
     pb.textContent = isMobile ? 'TAP ME!' : 'CLICK!';
     pb.className   = '';
     setInst(ts);
-    // Tutorial message via taunt slot
-    tauntEl.textContent = ts.tutMsg;
-    tauntEl.classList.remove('hot');
+    if (tauntEl) { tauntEl.textContent = ts.tutMsg; tauntEl.classList.remove('hot'); }
     if (ts.type === 'wait') {
       roundActionStart = 0;
       waitTO = setTimeout(() => {
         if (!roundEnded) {
-          tutorialStep++; // advance here since doCorrect skips wait-type advancement
+          tutorialStep++;
           if (tutorialStep >= TUTORIAL_STEPS.length) tutorialStep = -1;
           doCorrect(null, 1);
         }
@@ -1229,30 +1319,23 @@ function startRound() {
   }
 
   const diff = getDiff(score);
-  diffPill.textContent = diff.name;
-  diffPill.className   = 'diff-pill ' + diff.cls;
+  if (diffPill) { diffPill.textContent = diff.name; diffPill.className = 'diff-pill ' + diff.cls; }
 
-  // Frenzy every 10 rounds (score ≥ 10)
   if (score >= 10 && roundN % 10 === 0) { launchFrenzy(diff); return; }
 
-  // Special rounds every 7
   specialRound = (roundN > 1 && roundN % 7 === 0)
     ? (Math.random() < .55 ? 'bonus' : 'reverse')
     : null;
 
   if (specialRound === 'bonus') {
-    spBan.textContent = '⚡ BONUS ROUND — ×3';
-    spBan.className   = 'sp-ban bonus on';
-    setTimeout(() => spBan.classList.remove('on'), 2400);
+    if (spBan) { spBan.textContent = '⚡ BONUS ROUND — ×3'; spBan.className = 'sp-ban bonus on'; }
+    setTimeout(() => { if (spBan) spBan.classList.remove('on'); }, 2400);
   } else if (specialRound === 'reverse') {
-    spBan.textContent = '🔄 REVERSE ROUND';
-    spBan.className   = 'sp-ban reverse on';
-    setTimeout(() => spBan.classList.remove('on'), 2400);
+    if (spBan) { spBan.textContent = '🔄 REVERSE ROUND'; spBan.className = 'sp-ban reverse on'; }
+    setTimeout(() => { if (spBan) spBan.classList.remove('on'); }, 2400);
   }
 
-  // Silent round every 15 (score ≥ 15)
   const isSilent = score >= 15 && roundN % 15 === 0;
-
   let inst = trainingMode ? trainingPickRound() : pick(INSTS);
   prevInst = inst;
 
@@ -1266,14 +1349,12 @@ function startRound() {
   }
   curInst = inst;
 
-  subInstEl.textContent = roundN <= 8 ? (inst.hint || '') : '';
+  if (subInstEl) subInstEl.textContent = roundN <= 8 ? (inst.hint || '') : '';
 
-  // Button label + distractor colour
   const lblPool = BTN_LBLS[inst.type] || BTN_LBLS.click;
   pb.textContent = rand(lblPool);
   pb.className   = (score >= 3 && Math.random() < .32) ? rand(BTN_COLS.filter(c => c !== '')) : '';
 
-  // Tricks
   if (score >= 12 && Math.random() < .22) {
     Math.random() < .5 ? pb.classList.add('shrunken') : pb.classList.add('grown');
   }
@@ -1281,18 +1362,13 @@ function startRound() {
   if (score >= 10 && ['click','dblclick','tripleclick'].includes(inst.type) && Math.random() < .3) doTeleport();
   if (score >= 20 && inst.type === 'click' && Math.random() < .28) spawnDecoys(2);
   if (score >= 30 && inst.type === 'click' && Math.random() < .22) spawnDecoys(1);
-
-  // Mid-round switch
-  if (score >= 5 && Math.random() < .28) scheduleSwitch(diff.ms);
-
-  // Swipe hint arrow
+  if (score >= 5  && Math.random() < .28) scheduleSwitch(diff.ms);
   if (['swipe_up','swipe_down','swipe_left','swipe_right'].includes(inst.type)) showSwipeArrow(inst.type);
 
   if (isSilent) {
-    spBan.textContent = '🤫 SILENT ROUND';
-    spBan.className   = 'sp-ban silent on';
-    setTimeout(() => spBan.classList.remove('on'), 2000);
-    instEl.textContent = ''; instEl.className = 'inst';
+    if (spBan) { spBan.textContent = '🤫 SILENT ROUND'; spBan.className = 'sp-ban silent on'; }
+    setTimeout(() => { if (spBan) spBan.classList.remove('on'); }, 2000);
+    if (instEl) { instEl.textContent = ''; instEl.className = 'inst'; }
     setTimeout(() => { if (!roundEnded) { setInst(inst, 'appear'); S.sbr(); } }, 550);
   } else {
     setInst(inst);
@@ -1302,7 +1378,8 @@ function startRound() {
   if (inst.type === 'wait') {
     waitTO = setTimeout(() => { if (!roundEnded) doCorrect(null, mult); }, diff.ms - 100);
   } else {
-    roundActionStart = performance.now(); // start reaction clock for non-wait rounds
+    roundActionStart = performance.now();
+    totalRounds++;
   }
   startTimer(diff.ms);
 }
@@ -1327,16 +1404,28 @@ function doTeleport() {
 }
 
 function spawnDecoys(count) {
+  const pbRect = pb.getBoundingClientRect();
+  const z = btnZone.getBoundingClientRect();
   for (let i = 0; i < count; i++) {
-    const d    = document.createElement('button');
+    const d = document.createElement('button');
     d.className = 'decoy';
     d.classList.add(rand(['blue','green','yellow','purple']));
-    d.textContent  = rand(['FAKE', 'NOPE', "DON'T", 'TRAP', 'WRONG', 'FALSE']);
+    d.textContent  = rand(['FAKE','NOPE',"DON'T",'TRAP','WRONG','FALSE']);
     d.style.background = `radial-gradient(circle at 35% 30%,${rand(['#66aaff','#66ff99','#ffee66','#ee66ff'])},${rand(['#003388','#006622','#885500','#550077'])})`;
-    const z         = btnZone.getBoundingClientRect();
     d.style.position = 'absolute';
-    d.style.left     = (10 + Math.random() * (z.width  - 88)) + 'px';
-    d.style.top      = (10 + Math.random() * (z.height - 88)) + 'px';
+    // FIX v3: place decoy away from the real button
+    let nx, ny, attempts = 0;
+    do {
+      nx = 10 + Math.random() * (z.width  - 84);
+      ny = 10 + Math.random() * (z.height - 84);
+      attempts++;
+      // Convert to viewport coords for overlap check
+      const cx = z.left + nx + 32, cy = z.top + ny + 32;
+      const tooClose = Math.hypot(cx - (pbRect.left + pbRect.width/2), cy - (pbRect.top + pbRect.height/2)) < 80;
+      if (!tooClose) break;
+    } while (attempts < 8);
+    d.style.left = nx + 'px';
+    d.style.top  = ny + 'px';
     const kill = e => { e.preventDefault(); e.stopPropagation(); if (!gameActive || roundEnded) return; handleWrong(); };
     d.addEventListener('click',    kill);
     d.addEventListener('touchend', kill, { passive: false });
@@ -1348,35 +1437,39 @@ function scheduleSwitch(total) {
   const at = total * (.32 + Math.random() * .28);
   switchTO = setTimeout(() => {
     if (roundEnded) return;
-    const nt   = Math.random() < .5 ? 'click' : 'wait';
+    const nt = Math.random() < .5 ? 'click' : 'wait';
     const STXT = {
-      click: ['CLICK NOW!!!', 'NOW!!!', 'HIT IT!!!!', 'GO GO GO!', 'DO IT!!', 'TAP TAP TAP!'],
-      wait:  ["WAIT!", "STOP!", "FREEZE!", "DON'T TOUCH!", "HANDS OFF!!"],
+      click: ['CLICK NOW!!!','NOW!!!','HIT IT!!!!','GO GO GO!','DO IT!!','TAP TAP TAP!'],
+      wait:  ["WAIT!","STOP!","FREEZE!","DON'T TOUCH!","HANDS OFF!!"],
     };
     const ni = { text: rand(STXT[nt]), type: nt, col: nt === 'click' ? 'cr' : 'cy', hint: '' };
     curInst = ni;
     setInst(ni, 'leave');
     clearTimeout(waitTO);
     if (ni.type === 'wait') {
+      // Switching to wait: stop measuring reaction time
+      roundActionStart = 0;
       const rem = total - at, m = calcMult();
       waitTO = setTimeout(() => { if (!roundEnded) doCorrect(null, m); }, rem - 100);
+    } else {
+      // Switching to click: begin measuring from NOW (not from round start)
+      roundActionStart = performance.now();
+      totalRounds++;
     }
     showGlitch(ni.text); S.tick();
   }, at);
 }
 
 function updateFrenzyBanner() {
-  spBan.textContent = `⚠ FRENZY ${frenzyDone + 1}/${frenzyCount} ⚠`;
+  if (spBan) spBan.textContent = `⚠ FRENZY ${frenzyDone + 1}/${frenzyCount} ⚠`;
 }
 
-// ── FRENZY ──
 function launchFrenzy(diff) {
   isFrenzy = true;
   frenzyCount = 6 + Math.floor(score / 12) * 2;
   frenzyDone  = 0;
-  frRing.classList.add('on');
-  spBan.textContent = '⚠ FRENZY MODE ⚠';
-  spBan.className   = 'sp-ban frenzy on';
+  if (frRing) frRing.classList.add('on');
+  if (spBan)  { spBan.textContent = '⚠ FRENZY MODE ⚠'; spBan.className = 'sp-ban frenzy on'; }
   doFlash('fr'); S.frenzy(); vib([30, 20, 30, 20, 60]);
   setTimeout(() => runFrenzyRound(diff), 350);
 }
@@ -1387,7 +1480,8 @@ function runFrenzyRound(diff) {
   resetButton(); holdActive = false; holdDone = false; dblGuard = false; mouseDist = 0; roundEnded = false;
   updateFrenzyBanner();
   const inst = rand(FRENZY_INSTS);
-  curInst = inst; specialRound = 'frenzy'; subInstEl.textContent = '';
+  curInst = inst; specialRound = 'frenzy';
+  if (subInstEl) subInstEl.textContent = '';
   pb.textContent = rand(BTN_LBLS[inst.type] || BTN_LBLS.click);
   pb.className   = rand(BTN_COLS);
   setInst(inst);
@@ -1403,6 +1497,8 @@ function frenzyOK() {
   score += earned;
   const isNewBestF = saveModeScore(score);
   if (isNewBestF) { bestScore = modeBest[currentMode]; bestScoreDate = modeBestDate[currentMode]; }
+  // FIX v3: track frenzy hits toward accuracy
+  if (curInst && curInst.type !== 'wait') { totalRounds++; hitRounds++; updateAccPill(); }
   streak++; updateScoreUI(); updateStreak(); doFlash('fg'); frenzyDone++;
   showFB('✓', 'ok');
   setTimeout(() => runFrenzyRound(getDiff(score)), 110);
@@ -1410,12 +1506,16 @@ function frenzyOK() {
 
 function frenzyWrong() {
   if (roundEnded) return;
-  roundEnded = true; clearAllTimers(); endFrenzy(); loseLife();
+  roundEnded = true; clearAllTimers();
+  // FIX v3: track frenzy misses toward accuracy
+  if (curInst && curInst.type !== 'wait') { totalRounds++; missRounds++; updateAccPill(); }
+  endFrenzy(); loseLife();
 }
 
 function endFrenzy() {
-  isFrenzy = false; frRing.classList.remove('on');
-  spBan.classList.remove('on'); spBan.textContent = '';
+  isFrenzy = false;
+  if (frRing) frRing.classList.remove('on');
+  if (spBan)  { spBan.classList.remove('on'); spBan.textContent = ''; }
   if (!gameActive) return;
   setTimeout(startRound, 400);
 }
@@ -1428,29 +1528,26 @@ function doCorrect(ev, multOverride) {
   if (isFrenzy) { frenzyOK(); return; }
   roundEnded = true; clearAllTimers(); S.click(); vibOK();
 
-  // Advance tutorial step (only for non-wait rounds; wait rounds are advanced in their own timeout)
   if (tutorialStep >= 0 && tutorialStep < TUTORIAL_STEPS.length) {
     const ts = TUTORIAL_STEPS[tutorialStep];
     if (ts.type !== 'wait') {
       tutorialStep++;
       if (tutorialStep >= TUTORIAL_STEPS.length) tutorialStep = -1;
     } else {
-      // wait rounds advance tutorialStep in their waitTO callback
       if (tutorialStep >= TUTORIAL_STEPS.length) tutorialStep = -1;
     }
   }
 
-  // Record reaction time for non-wait rounds
   let lastRT = 0;
   if (roundActionStart > 0 && curInst && curInst.type !== 'wait') {
-    lastRT = Math.round(performance.now() - roundActionStart);
+    lastRT = Math.min(9999, Math.round(performance.now() - roundActionStart)); // FIX v3: cap at 9999ms
     reactTimes.push(lastRT);
     const avg = Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length);
     if (reactSval) reactSval.textContent = avg + 'ms';
   }
   roundActionStart = 0;
-  // Training mode: log this round
   if (trainingMode) trainingOnRoundEnd(true, lastRT);
+  if (curInst && curInst.type !== 'wait') { hitRounds++; updateAccPill(); }
   streak++; updateStreak(); if (streak > 1) showCombo(streak);
 
   const mult   = multOverride !== undefined ? multOverride : calcMult();
@@ -1477,24 +1574,25 @@ function doCorrect(ev, multOverride) {
 }
 
 function loseLife() {
-  // Training mode: log miss, never actually end game
   if (trainingMode) {
     trainingOnRoundEnd(false, 0);
     streak = 0; updateStreak();
     S.life(); vibWrong(); doShake(); doFlash('fr');
     showFB('✗ MISS', 'bad');
+    if (curInst && curInst.type !== 'wait') { missRounds++; updateAccPill(); }
     setTimeout(startRound, 550);
     return;
   }
-  // Zen mode: no lives — just reset streak and continue
   if (currentMode === 'zen') {
     streak = 0; updateStreak();
     S.life(); vibWrong(); doShake(); doFlash('fr');
     showFB('✗ MISS', 'bad');
+    if (curInst && curInst.type !== 'wait') { missRounds++; updateAccPill(); }
     setTimeout(startRound, 550);
     return;
   }
   if (currentMode === 'daily') dailyRoundLog.push('miss');
+  if (curInst && curInst.type !== 'wait') { missRounds++; updateAccPill(); }
   if (lives === 1) showLastChance();
   lives--; updateLives(); S.life(); vibWrong(); doShake(); doFlash('fr');
   lifeEls[lives]?.classList.add('flash-die');
@@ -1518,7 +1616,7 @@ function handleTimeout() {
 }
 
 // ══════════════════════════════════════
-//  INPUT: TRIPLE CLICK / TAP
+//  INPUT: TRIPLE
 // ══════════════════════════════════════
 function handleTriple(ev) {
   tripleCount++; clearTimeout(tripleTO);
@@ -1532,7 +1630,7 @@ function handleTriple(ev) {
 }
 
 // ══════════════════════════════════════
-//  INPUT: MOUSE (desktop)
+//  INPUT: MOUSE
 // ══════════════════════════════════════
 function handleClick(e) {
   if (!gameActive || roundEnded || !curInst) return;
@@ -1563,7 +1661,6 @@ function handleRightClick(e) {
 function handleKeyDown(e) {
   if (!gameActive || roundEnded || !curInst) return;
   const k = e.code;
-
   if (k === 'Space') {
     e.preventDefault();
     if (curInst.type === 'space') { doCorrect(null); return; }
@@ -1576,18 +1673,15 @@ function handleKeyDown(e) {
     }
     handleWrong(); return;
   }
-  if (k === 'Enter')   { e.preventDefault(); curInst.type === 'enter'      ? doCorrect(null) : handleWrong(); return; }
-  if (k === 'KeyA')    {                      curInst.type === 'key_a'     ? doCorrect(null) : handleWrong(); return; }
-  if (k === 'Escape')  { if (curInst.type === 'key_escape') doCorrect(null); return; }
+  if (k === 'Enter')  { e.preventDefault(); curInst.type === 'enter'      ? doCorrect(null) : handleWrong(); return; }
+  if (k === 'KeyA')   {                      curInst.type === 'key_a'      ? doCorrect(null) : handleWrong(); return; }
+  if (k === 'Escape') { if (curInst.type === 'key_escape') doCorrect(null); return; }
 }
 
 function handleKeyUp(e) {
   if (e.code !== 'Space' || !holdActive) return;
   holdActive = false; clearTimeout(holdTO); cancelAnimationFrame(holdRAF);
-  holdRingEl.classList.remove('show');
-  // Bug 6 fix: check roundEnded AND gameActive here — the timeout may have already
-  // ended the round (setting roundEnded=true) while the key was still physically held,
-  // so releasing it must not fire handleWrong() on the dead round.
+  if (holdRingEl) holdRingEl.classList.remove('show');
   if (!holdDone && !roundEnded && gameActive && curInst && curInst.type === 'hold_space') handleWrong();
 }
 
@@ -1596,15 +1690,13 @@ function handleMouseMove(e) {
   const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
   mouseDist += Math.sqrt(dx * dx + dy * dy);
   lastMX = e.clientX; lastMY = e.clientY;
-  if (curInst.type === 'move'  && mouseDist > 90  && !roundEnded) { doCorrect(e);    return; }
-  if (curInst.type === 'wait'  && mouseDist > 120 && !roundEnded) handleWrong();
+  if (curInst.type === 'move' && mouseDist > 90  && !roundEnded) { doCorrect(e);  return; }
+  if (curInst.type === 'wait' && mouseDist > 120 && !roundEnded) handleWrong();
 }
 
 // ══════════════════════════════════════
-//  INPUT: TOUCH (mobile)
+//  INPUT: TOUCH
 // ══════════════════════════════════════
-
-// Hold button — touchstart
 pb.addEventListener('touchstart', (e) => {
   if (!gameActive || roundEnded || !curInst) return;
   e.preventDefault();
@@ -1614,10 +1706,6 @@ pb.addEventListener('touchstart', (e) => {
   }
 }, { passive: false });
 
-// Tap / release — touchend (single unified handler, Bug 5 fix)
-// Previously there were TWO touchend listeners for dblclick (one bubble, one capture)
-// which caused a race: the bubble handler could fire handleWrong() before the
-// capture handler registered the second tap. Now handled entirely here with lastTapTime.
 let lastTapTime = 0;
 pb.addEventListener('touchend', (e) => {
   if (!gameActive || roundEnded || !curInst) return;
@@ -1626,25 +1714,21 @@ pb.addEventListener('touchend', (e) => {
 
   if (t === 'hold_btn') {
     holdActive = false; clearTimeout(holdTO); cancelAnimationFrame(holdRAF);
-    holdRingEl.classList.remove('show');
+    if (holdRingEl) holdRingEl.classList.remove('show');
     if (!holdDone && !roundEnded) handleWrong();
     return;
   }
   if (t === 'tripleclick') { handleTriple(e.changedTouches[0] || e); return; }
 
-  // Unified double-tap: track timing here, no separate capture listener needed
   if (t === 'dblclick') {
     const now = Date.now();
     if (now - lastTapTime < 350) {
-      // Second tap within window — success
       lastTapTime = 0;
       doCorrect(e.changedTouches[0] || e);
     } else {
-      // First tap — start the window, arm a wrong-answer timeout
       lastTapTime = now;
       dblGuard = true;
       setTimeout(() => {
-        // If lastTapTime was reset by second tap, dblGuard is already false — skip
         if (!roundEnded && dblGuard && lastTapTime !== 0) {
           dblGuard = false; lastTapTime = 0; handleWrong();
         }
@@ -1656,14 +1740,13 @@ pb.addEventListener('touchend', (e) => {
   t === 'click' ? doCorrect(e.changedTouches[0] || e) : handleWrong();
 }, { passive: false });
 
-// Swipe — touchstart on cabinet
 cab.addEventListener('touchstart', (e) => {
   if (!gameActive || roundEnded) return;
-  const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY;
+  const t = e.touches[0];
+  touchStartX = t.clientX; touchStartY = t.clientY;
   touchMoved = false; swipeHandled = false;
 }, { passive: true });
 
-// Swipe — touchmove
 cab.addEventListener('touchmove', (e) => {
   if (!gameActive || roundEnded || !curInst) return;
   const t   = e.touches[0];
@@ -1673,7 +1756,6 @@ cab.addEventListener('touchmove', (e) => {
   if (curInst.type === 'wait' && dist > 80 && !roundEnded) handleWrong();
 }, { passive: true });
 
-// Swipe — touchend on cabinet
 cab.addEventListener('touchend', (e) => {
   if (!gameActive || roundEnded || !curInst || swipeHandled) return;
   if (!touchMoved) return;
@@ -1688,19 +1770,19 @@ cab.addEventListener('touchend', (e) => {
   else if (curInst.type === 'wait') handleWrong();
 }, { passive: true });
 
-// Outside tap — wait violation on mobile
 document.addEventListener('touchend', (e) => {
   if (!gameActive || roundEnded || !curInst) return;
   if (e.target === pb || e.target.classList.contains('decoy')) return;
-  if (scrStart.contains(e.target) || scrGO.contains(e.target)) return;
+  if (scrStart && scrStart.contains(e.target)) return;
+  if (scrGO    && scrGO.contains(e.target)) return;
   if (curInst.type === 'wait') handleWrong();
 }, { passive: true });
 
-// Outside click — wait violation on desktop
 document.addEventListener('click', (e) => {
   if (!gameActive || roundEnded || !curInst) return;
   if (e.target === pb || e.target.classList.contains('decoy')) return;
-  if (scrStart.contains(e.target) || scrGO.contains(e.target)) return;
+  if (scrStart && scrStart.contains(e.target)) return;
+  if (scrGO    && scrGO.contains(e.target)) return;
   if (curInst.type === 'wait') handleWrong();
 }, true);
 
@@ -1709,7 +1791,7 @@ document.addEventListener('click', (e) => {
 // ══════════════════════════════════════
 function gameOver() {
   gameActive = false; isFrenzy = false;
-  frRing.classList.remove('on');
+  if (frRing) frRing.classList.remove('on');
   chromaOff(); stopHB(); ekgPanic = 0; bgIntensity = 0; corruptLevel = 0;
   doShake(); doFlash('fr'); S.wrong(); streak = 0; updateStreak();
   stopSprintTimer();
@@ -1717,67 +1799,91 @@ function gameOver() {
   const isNew = saveModeScore(score);
   if (isNew) { bestScore = modeBest[currentMode]; bestScoreDate = modeBestDate[currentMode]; }
 
-  // ── HOT SEAT: intercept P1 game over ──
-  if (hsMode && hsPlayer === 1) {
-    hotSeatRoundComplete(score);
-    return;
-  }
-  if (hsMode && hsPlayer === 2) {
-    hotSeatRoundComplete(score);
-    return;
-  }
+  if (hsMode && hsPlayer === 1) { hotSeatRoundComplete(score); return; }
+  if (hsMode && hsPlayer === 2) { hotSeatRoundComplete(score); return; }
 
-  // Save daily result
   if (currentMode === 'daily') saveDailyResult(score);
 
-  goScore.textContent = score;
-  goBest.textContent  = modeBest[currentMode];
+  if (goScore) goScore.textContent = score;
+  if (goBest)  goBest.textContent  = modeBest[currentMode];
   const failMsg = rand(FAIL_MSGS);
   localStorage.setItem('pb_last_fail', failMsg);
-  goMsg.textContent   = failMsg;
-  goRank.textContent  = getRank(score);
-  goDied.textContent  = currentMode === 'sprint'
+  if (goMsg)  goMsg.textContent  = failMsg;
+  if (goRank) goRank.textContent = getRank(score);
+  if (goDied) goDied.textContent = currentMode === 'sprint'
     ? 'Sprint ended! 30 seconds up.'
     : 'Died on: ' + (curInst ? curInst.text : '???');
-  goNB.className      = isNew ? 'new-best-badge' : 'new-best-badge hidden';
+  if (goNB) goNB.className = isNew ? 'new-best-badge' : 'new-best-badge hidden';
 
-  // Daily grid
-  if (currentMode === 'daily') {
+  if (dailyResultEl && currentMode === 'daily') {
     dailyResultEl.classList.remove('hidden');
-    dailyNumEl.textContent = `Day #${getDailyNum()}`;
-    dailyGridEl.innerHTML  = dailyRoundLog.map(r => {
-      return `<span class="dg-cell ${r}">${r==='hit'?'🟩':r==='miss'?'🟥':'🟨'}</span>`;
-    }).join('');
-  } else {
+    if (dailyNumEl) dailyNumEl.textContent = `Day #${getDailyNum()}`;
+    if (dailyGridEl) dailyGridEl.innerHTML = dailyRoundLog.map(r =>
+      `<span class="dg-cell">${r==='hit'?'🟩':r==='miss'?'🟥':'🟨'}</span>`
+    ).join('');
+  } else if (dailyResultEl) {
     dailyResultEl.classList.add('hidden');
   }
 
-  // Sprint mode label
-  if (currentMode === 'sprint') {
-    goMsg.textContent = `Survived 30 seconds!`;
+  if (currentMode === 'sprint' && goMsg) goMsg.textContent = 'Survived 30 seconds!';
+
+  const accEl = document.getElementById('go-accuracy');
+  if (accEl) {
+    accEl.textContent = totalRounds > 0 ? Math.round((hitRounds / totalRounds) * 100) + '%' : '—';
   }
 
-  // Reaction time summary
+  // FIX: null-check goReact and reactBD
   if (reactTimes.length > 0) {
     const avg = Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length);
-    goReact.textContent = avg + 'ms';
+    if (goReact) goReact.textContent = avg + 'ms';
     const last8 = reactTimes.slice(-8);
-    reactBD.innerHTML = last8.map(t => {
+    if (reactBD) reactBD.innerHTML = last8.map(t => {
       const cls = t < 350 ? 'fast' : t < 650 ? 'mid' : 'slow';
       return `<span class="rt-pill ${cls}">${t}ms</span>`;
     }).join('');
+    const fastest = Math.min(...reactTimes);
+    const slowest = Math.max(...reactTimes);
+    const badgesEl = document.getElementById('go-badges');
+    if (badgesEl) {
+      badgesEl.innerHTML =
+        `<span class="go-badge fastest">⚡ Best: ${fastest}ms</span>` +
+        `<span class="go-badge slowest">🐢 Worst: ${slowest}ms</span>`;
+    }
+    const chartWrap = document.getElementById('rt-chart-wrap');
+    if (chartWrap) {
+      chartWrap.classList.remove('hidden');
+      // FIX: use the specific canvas ID "rt-chart", not the stats one
+      setTimeout(() => drawRTChart('rt-chart', reactTimes), 60);
+    }
   } else {
-    goReact.textContent = '—';
-    reactBD.innerHTML = '';
+    if (goReact) goReact.textContent = '—';
+    if (reactBD) reactBD.innerHTML = '';
+    const badgesEl = document.getElementById('go-badges');
+    if (badgesEl) badgesEl.innerHTML = '';
+    document.getElementById('rt-chart-wrap')?.classList.add('hidden');
   }
 
-  scrGO.classList.remove('off');
+  const ratioWrap = document.getElementById('hit-ratio-wrap');
+  if (ratioWrap && totalRounds > 0) {
+    ratioWrap.classList.remove('hidden');
+    const hrlHits = document.getElementById('hrl-hits');
+    const hrlMiss = document.getElementById('hrl-miss');
+    if (hrlHits) hrlHits.textContent = hitRounds + ' hits';
+    if (hrlMiss) hrlMiss.textContent = missRounds + ' miss';
+    const pct = (hitRounds / totalRounds) * 100;
+    setTimeout(() => { const f = document.getElementById('hrb-fill'); if (f) f.style.width = pct + '%'; }, 80);
+  } else if (ratioWrap) {
+    ratioWrap.classList.add('hidden');
+  }
+
+  recordGameToAllTime(score, reactTimes, hitRounds, missRounds);
+  if (scrGO) scrGO.classList.remove('off');
 }
 
 // ══════════════════════════════════════
 //  2-PLAYER HOT SEAT
 // ══════════════════════════════════════
-const HOTSEAT_ROUNDS = 5; // rounds per player per turn
+const HOTSEAT_ROUNDS = 5;
 
 const RIVALRY_TAUNTS_P1_AHEAD = [
   'P1 is smoking you! 🔥', 'You call that panic?', 'P1 left you in the dust.',
@@ -1788,12 +1894,12 @@ const RIVALRY_TAUNTS_P2_AHEAD = [
   'P1 panic mode: activated.', 'P2 smells blood. React faster!',
 ];
 const RIVALRY_TAUNTS_TIED = [
-  'Dead even — who blinks first?', 'It\'s neck and neck!',
+  'Dead even — who blinks first?', "It's neck and neck!",
   'Too close to call…', 'Someone has to crack. Will it be you?',
 ];
 const HANDOFF_MSGS = [
   ['GET READY, P2!', 'P1 has set the bar. Can you beat it?'],
-  ['YOUR TURN, P2!', 'Don\'t choke now.'],
+  ['YOUR TURN, P2!', "Don't choke now."],
   ['PASS THE DEVICE', 'P2 steps up.'],
 ];
 const WIN_TAUNTS = [
@@ -1805,12 +1911,11 @@ const DRAW_TAUNTS = [
   'A PERFECT DRAW. Rematch?', 'Neither cracked. True rivals.', 'Tied at the top. Impressive.',
 ];
 
-// hsMode, hsPlayer, hsScores, hsLives, hsReactTimes declared near top
-
 function startHotSeat() {
+  trainingMode = false; // FIX v3: ensure training mode is off
   hsMode = true; hsPlayer = 1; hsRoundsPlayed = 0;
   hsScores = [0, 0]; hsLives = [3, 3]; hsReactTimes = [[], []];
-  selectMode('classic'); // hot seat always classic rules
+  selectMode('classic');
   updateHotSeatHUD();
   startGame();
 }
@@ -1831,22 +1936,15 @@ function hotSeatRoundComplete(playerScore) {
   if (!hsMode) return;
   hsScores[hsPlayer - 1] = playerScore;
   hsReactTimes[hsPlayer - 1] = [...reactTimes];
-  if (hsPlayer === 1) {
-    // Show handoff overlay then start P2
-    showHandoffOverlay();
-  } else {
-    // Both players done — show results
-    showHotSeatResults();
-  }
+  if (hsPlayer === 1) showHandoffOverlay();
+  else showHotSeatResults();
 }
 
 function showHandoffOverlay() {
-  const msg = HANDOFF_MSGS[Math.floor(Math.random() * HANDOFF_MSGS.length)];
-  const diff = hsScores[0];
-  const taunt = diff > 0
-    ? rand(RIVALRY_TAUNTS_P2_AHEAD.concat([`P1 scored ${diff}. Beat it.`]))
-    : `P1 scored 0. Easy target.`;
-
+  const msg   = HANDOFF_MSGS[Math.floor(Math.random() * HANDOFF_MSGS.length)];
+  const taunt = hsScores[0] > 0
+    ? rand(RIVALRY_TAUNTS_P2_AHEAD.concat([`P1 scored ${hsScores[0]}. Beat it.`]))
+    : 'P1 scored 0. Easy target.';
   const el = document.createElement('div');
   el.id        = 'handoff-ov';
   el.className = 'handoff-ov';
@@ -1864,17 +1962,17 @@ function showHandoffOverlay() {
     hsPlayer = 2; hsRoundsPlayed = 0;
     reactTimes = []; roundActionStart = 0;
     updateHotSeatHUD();
-    // Start fresh game for P2
     score = 0; lives = 3; streak = 0; roundN = 0;
     prevInst = null; specialRound = null; isFrenzy = false;
     bgIntensity = 0; corruptLevel = 0; ekgPanic = 0;
     recentInsts.length = 0; dailyRoundLog = [];
-    seededR = null; tutorialStep = -1;
+    seededR = null; tutorialStep = -1; isFirstRoundOfGame = true;
     gameActive = true;
     updateScoreUI(); updateLives(); updateStreak();
-    scrGO.classList.add('off');
-    tbarEl.style.width = '100%'; tbarEl.className = 'timer-bar';
-    frRing.classList.remove('on'); chromaOff();
+    if (scrGO) scrGO.classList.add('off');
+    if (tbarEl) { tbarEl.style.width = '100%'; tbarEl.className = 'timer-bar'; }
+    if (frRing) frRing.classList.remove('on');
+    chromaOff();
     if (tauntEl) tauntEl.textContent = '';
     startRound();
   });
@@ -1882,20 +1980,17 @@ function showHandoffOverlay() {
 
 function showHotSeatResults() {
   const el = document.getElementById('scr-go');
+  if (!el) return;
   const [s1, s2] = hsScores;
-
-  // Build rivalry taunt
   let rivalTaunt;
-  if (s1 > s2)       rivalTaunt = WIN_TAUNTS[Math.floor(Math.random() * WIN_TAUNTS.length)]('PLAYER 1', s1 - s2);
-  else if (s2 > s1)  rivalTaunt = WIN_TAUNTS[Math.floor(Math.random() * WIN_TAUNTS.length)]('PLAYER 2', s2 - s1);
-  else               rivalTaunt = DRAW_TAUNTS[Math.floor(Math.random() * DRAW_TAUNTS.length)];
+  if (s1 > s2)      rivalTaunt = WIN_TAUNTS[Math.floor(Math.random() * WIN_TAUNTS.length)]('PLAYER 1', s1 - s2);
+  else if (s2 > s1) rivalTaunt = WIN_TAUNTS[Math.floor(Math.random() * WIN_TAUNTS.length)]('PLAYER 2', s2 - s1);
+  else              rivalTaunt = DRAW_TAUNTS[Math.floor(Math.random() * DRAW_TAUNTS.length)];
 
   const avg1 = hsReactTimes[0].length ? Math.round(hsReactTimes[0].reduce((a,b)=>a+b,0)/hsReactTimes[0].length) : null;
   const avg2 = hsReactTimes[1].length ? Math.round(hsReactTimes[1].reduce((a,b)=>a+b,0)/hsReactTimes[1].length) : null;
 
-  const existingHS = document.getElementById('hs-split-results');
-  if (existingHS) existingHS.remove();
-
+  document.getElementById('hs-split-results')?.remove();
   const split = document.createElement('div');
   split.id = 'hs-split-results';
   split.className = 'hs-split-results';
@@ -1919,41 +2014,38 @@ function showHotSeatResults() {
     </div>
     ${s1 === s2 ? '<div class="hs-split-draw">🤝 DRAW!</div>' : ''}
   `;
-
   el.insertBefore(split, el.querySelector('.go-btns'));
 
-  // Override retry to reset hot seat
   const retryBtn = document.getElementById('btn-retry');
-  retryBtn.textContent = 'REMATCH';
-  retryBtn.onclick = () => {
-    split.remove();
-    retryBtn.textContent = 'RETRY';
-    retryBtn.onclick = startGame;
-    startHotSeat();
-  };
+  if (retryBtn) {
+    retryBtn.textContent = 'REMATCH';
+    retryBtn.onclick = () => {
+      split.remove();
+      retryBtn.textContent = 'RETRY';
+      retryBtn.onclick = startGame;
+      startHotSeat();
+    };
+  }
 
-  // Show game over screen
-  goScore.textContent = `${s1} / ${s2}`;
-  goBest.textContent  = Math.max(s1, s2);
-  goMsg.textContent   = rivalTaunt;
-  goRank.textContent  = '';
-  goDied.textContent  = 'Hot Seat complete';
-  goNB.className      = 'new-best-badge hidden';
-  reactBD.innerHTML   = '';
-  goReact.textContent = `${avg1||'—'}ms / ${avg2||'—'}ms`;
-  dailyResultEl.classList.add('hidden');
+  if (goScore) goScore.textContent = `${s1} / ${s2}`;
+  if (goBest)  goBest.textContent  = Math.max(s1, s2);
+  if (goMsg)   goMsg.textContent   = rivalTaunt;
+  if (goRank)  goRank.textContent  = '';
+  if (goDied)  goDied.textContent  = 'Hot Seat complete';
+  if (goNB)    goNB.className      = 'new-best-badge hidden';
+  if (reactBD) reactBD.innerHTML   = '';
+  if (goReact) goReact.textContent = `${avg1||'—'}ms / ${avg2||'—'}ms`;
+  if (dailyResultEl) dailyResultEl.classList.add('hidden');
 
   const hud = document.getElementById('hs-hud');
   if (hud) hud.classList.add('hidden');
-
   hsMode = false;
-  scrGO.classList.remove('off');
+  if (scrGO) scrGO.classList.remove('off');
 }
 
 // ══════════════════════════════════════
-//  REFLEX TRAINING MODE
+//  TRAINING MODE
 // ══════════════════════════════════════
-// trainingMode declared near top
 const TRAINING_ROUNDS   = 20;
 const TRAINING_KEY      = 'pb_training_sessions';
 const TRAINING_MAX_HIST = 30;
@@ -1982,25 +2074,30 @@ function saveTrainingSession(avgRT, rts) {
 }
 
 function startTraining() {
-  trainingMode     = true;
-  trainingPhase    = 'warmup';
-  trainingRoundN   = 0;
-  trainingRTs      = [];
+  trainingMode   = true;
+  hsMode         = false; // FIX v3: ensure hot-seat mode is off
+  trainingPhase  = 'warmup';
+  trainingRoundN = 0;
+  trainingRTs    = [];
   trainingPhaseLog = [];
   selectMode('classic');
   score = 0; lives = 99; streak = 0; roundN = 0;
   prevInst = null; specialRound = null; isFrenzy = false;
   bgIntensity = 0; corruptLevel = 0; ekgPanic = 0;
   reactTimes = []; roundActionStart = 0;
+  totalRounds = 0; hitRounds = 0; missRounds = 0;
+  isFirstRoundOfGame = true;
   recentInsts.length = 0; dailyRoundLog = [];
   seededR = null; tutorialStep = -1;
   INSTS        = getActiveRounds();
   FRENZY_INSTS = isMobile ? FRENZY_MOBILE : FRENZY_DESKTOP;
   gameActive   = true;
   updateScoreUI(); updateLives(); updateStreak();
-  scrStart.classList.add('off'); scrGO.classList.add('off');
-  tbarEl.style.width = '100%'; tbarEl.className = 'timer-bar';
-  frRing.classList.remove('on'); chromaOff();
+  if (scrStart) scrStart.classList.add('off');
+  if (scrGO)    scrGO.classList.add('off');
+  if (tbarEl)   { tbarEl.style.width = '100%'; tbarEl.className = 'timer-bar'; }
+  if (frRing)   frRing.classList.remove('on');
+  chromaOff();
   updateTrainingHUD();
   startRound();
 }
@@ -2079,9 +2176,7 @@ function showTrainingResults(avg) {
   const trend    = prev && avg ? avg - prev.avg : null;
   const sparkData = sessions.slice(-10).map(s => s.avg);
 
-  const existingTR = document.getElementById('training-results');
-  if (existingTR) existingTR.remove();
-
+  document.getElementById('training-results')?.remove();
   const tr = document.createElement('div');
   tr.id = 'training-results';
   tr.className = 'training-results-panel';
@@ -2106,21 +2201,62 @@ function showTrainingResults(avg) {
   `;
 
   const goEl = document.getElementById('scr-go');
-  goEl.insertBefore(tr, goEl.querySelector('.go-btns'));
+  if (goEl) goEl.insertBefore(tr, goEl.querySelector('.go-btns'));
 
-  goScore.textContent = avg ? avg + 'ms' : '—';
-  goBest.textContent  = sessions.length ? Math.min(...sessions.map(s => s.avg)) + 'ms' : '—';
-  goMsg.textContent   = avg
+  if (goScore) goScore.textContent = avg ? avg + 'ms' : '—';
+  if (goBest)  goBest.textContent  = sessions.length ? Math.min(...sessions.map(s => s.avg)) + 'ms' : '—';
+  if (goMsg)   goMsg.textContent   = avg
     ? (avg < 300 ? 'Inhuman reflexes.' : avg < 450 ? 'Sharp. Keep it up.' : avg < 650 ? 'Room to improve.' : 'Train harder.')
     : 'No data recorded.';
-  goRank.textContent  = '';
-  goDied.textContent  = TRAINING_ROUNDS + ' rounds completed';
-  goNB.className      = 'new-best-badge hidden';
-  reactBD.innerHTML   = '';
-  goReact.textContent = avg ? avg + 'ms' : '—';
-  dailyResultEl.classList.add('hidden');
-  scrGO.classList.remove('off');
+  if (goRank)  goRank.textContent  = '';
+  if (goDied)  goDied.textContent  = TRAINING_ROUNDS + ' rounds completed';
+  if (goNB)    goNB.className      = 'new-best-badge hidden';
+  if (reactBD) reactBD.innerHTML   = '';
+  if (goReact) goReact.textContent = avg ? avg + 'ms' : '—';
+  if (dailyResultEl) dailyResultEl.classList.add('hidden');
+  if (scrGO) scrGO.classList.remove('off');
   setTimeout(() => drawSparkline(sparkData), 50);
+}
+
+// FIX: drawRTChart now takes a canvasId parameter to avoid collision between
+// game-over canvas ("rt-chart") and stats canvas ("stats-rt-chart")
+function drawRTChart(canvasId, rts) {
+  const c = document.getElementById(canvasId);
+  if (!c || !rts || !rts.length) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const pad = 4;
+  const n   = Math.min(rts.length, 24);
+  const data = rts.slice(-n);
+  const maxV = Math.max(...data, 800);
+  const bw   = Math.floor((W - pad * 2) / n);
+  const gap  = 2;
+
+  ctx.clearRect(0, 0, W, H);
+  [350, 650].forEach(thresh => {
+    const y = H - pad - ((thresh / maxV) * (H - pad * 2));
+    ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = thresh === 350 ? 'rgba(45,255,0,.2)' : 'rgba(255,229,0,.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  data.forEach((v, i) => {
+    const x   = pad + i * bw;
+    const bh  = Math.max(4, ((v / maxV) * (H - pad * 2)));
+    const y   = H - pad - bh;
+    const col = v < 350 ? '#2dff00' : v < 650 ? '#ffe500' : '#ff1133';
+    ctx.fillStyle = col + '33';
+    ctx.fillRect(x + gap / 2, y, bw - gap, bh);
+    ctx.fillStyle = col;
+    ctx.fillRect(x + gap / 2, y, bw - gap, 2);
+    if (v === Math.min(...data)) {
+      ctx.shadowColor = col; ctx.shadowBlur = 6;
+      ctx.fillRect(x + gap / 2, y, bw - gap, bh);
+      ctx.shadowBlur = 0;
+    }
+  });
 }
 
 function drawSparkline(data) {
@@ -2140,7 +2276,7 @@ function drawSparkline(data) {
   pts.forEach(p => ctx.lineTo(p.x, p.y));
   ctx.lineTo(pts[pts.length-1].x, H);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(0,238,255,0.08)';
+  ctx.fillStyle = 'rgba(0,238,255,0.07)';
   ctx.fill();
   ctx.beginPath();
   pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
@@ -2158,15 +2294,88 @@ function drawSparkline(data) {
   ctx.fill(); ctx.shadowBlur = 0;
 }
 
+// ══════════════════════════════════════
+//  STATS SCREEN
+// ══════════════════════════════════════
+function openStats() {
+  const el = document.getElementById('scr-stats');
+  if (!el) return;
+  renderStats();
+  el.classList.remove('off');
+}
+
+function closeStats() {
+  document.getElementById('scr-stats')?.classList.add('off');
+}
+
+function resetAllTimeStats() {
+  if (!confirm('Reset all-time stats? This cannot be undone.')) return;
+  localStorage.removeItem(ALLTIME_KEY);
+  renderStats();
+}
+
+function renderStats() {
+  const body = document.getElementById('stats-body');
+  if (!body) return;
+  const s      = loadAllTimeStats();
+  const games  = s.gamesPlayed  || 0;
+  const best   = s.bestScore    || 0;
+  const hits   = s.totalHits    || 0;
+  const misses = s.totalMisses  || 0;
+  const total  = hits + misses;
+  const accPct = total > 0 ? Math.round((hits / total) * 100) : null;
+  const bestRT = s.bestRT || null;
+  const allRTs = s.allRTs || [];
+  const avgRT  = allRTs.length ? Math.round(allRTs.reduce((a,b)=>a+b,0)/allRTs.length) : null;
+
+  const modeBestRows = ['classic','sprint','zen','daily'].map(m => {
+    const v = localStorage.getItem('pb_best' + (m==='classic'?'':'_'+m)) || '0';
+    return `<div class="stat-item"><span class="stat-lbl">${m.toUpperCase()}</span><div class="stat-val">${v}</div></div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="stats-section">
+      <div class="stats-sec-title">CAREER</div>
+      <div class="stats-grid">
+        <div class="stat-item"><span class="stat-lbl">Games Played</span><div class="stat-val">${games}</div></div>
+        <div class="stat-item"><span class="stat-lbl">Best Score</span><div class="stat-val" style="color:var(--yellow);text-shadow:0 0 8px #ffe500">${best}</div></div>
+        <div class="stat-item"><span class="stat-lbl">Total Hits</span><div class="stat-val" style="color:var(--green)">${hits}</div></div>
+        <div class="stat-item"><span class="stat-lbl">Total Misses</span><div class="stat-val" style="color:var(--red)">${misses}</div></div>
+        ${accPct !== null ? `<div class="stat-item"><span class="stat-lbl">All-Time Acc</span><div class="stat-val" style="color:${accPct>=75?'var(--green)':accPct>=60?'var(--orange)':'var(--red)'}">${accPct}%</div></div>` : ''}
+        ${bestRT ? `<div class="stat-item"><span class="stat-lbl">Best Reaction</span><div class="stat-val" style="color:var(--cyan)">${bestRT}ms</div></div>` : ''}
+        ${avgRT  ? `<div class="stat-item"><span class="stat-lbl">Avg Reaction</span><div class="stat-val" style="color:var(--purple)">${avgRT}ms</div></div>` : ''}
+      </div>
+    </div>
+    <div class="stats-section">
+      <div class="stats-sec-title">MODE BESTS</div>
+      <div class="stats-grid">${modeBestRows}</div>
+    </div>
+    ${allRTs.length > 1 ? `
+    <div class="stats-section">
+      <div class="stats-sec-title">REACTION HISTORY</div>
+      <canvas class="stats-all-time-chart" id="stats-rt-chart" width="280" height="60"></canvas>
+    </div>` : ''}
+    ${games === 0 ? '<div class="stats-empty">No games played yet.<br>Hit PLAY to get started!</div>' : ''}
+    <button class="stats-reset-btn" onclick="resetAllTimeStats()">🗑 RESET ALL STATS</button>
+  `;
+  // FIX: use the dedicated stats canvas ID
+  if (allRTs.length > 1) {
+    setTimeout(() => drawRTChart('stats-rt-chart', allRTs.slice(-24)), 50);
+  }
+}
+
+// ══════════════════════════════════════
+//  SPRINT TIMER
+// ══════════════════════════════════════
 function startSprintTimer() {
   if (currentMode !== 'sprint') return;
   sprintEndTime = performance.now() + SPRINT_DURATION;
-  sprintBadge.classList.remove('hidden');
+  if (sprintBadge) sprintBadge.classList.remove('hidden');
   function tick() {
-    const rem = Math.max(0, sprintEndTime - performance.now());
+    const rem  = Math.max(0, sprintEndTime - performance.now());
     const secs = Math.ceil(rem / 1000);
     if (sprintTimeEl) sprintTimeEl.textContent = secs;
-    sprintBadge.classList.toggle('sprint-urgent', secs <= 10);
+    if (sprintBadge)  sprintBadge.classList.toggle('sprint-urgent', secs <= 10);
     if (rem <= 0) { gameOver(); return; }
     sprintRAF = requestAnimationFrame(tick);
   }
@@ -2183,7 +2392,6 @@ function stopSprintTimer() {
 // ══════════════════════════════════════
 function startGame() {
   getAC();
-  // Modular round system: merge builtin + active custom packs
   INSTS        = getActiveRounds();
   FRENZY_INSTS = isMobile ? FRENZY_MOBILE : FRENZY_DESKTOP;
 
@@ -2191,23 +2399,32 @@ function startGame() {
   prevInst = null; specialRound = null; isFrenzy = false;
   bgIntensity = 0; corruptLevel = 0; ekgPanic = 0;
   reactTimes = []; roundActionStart = 0;
+  totalRounds = 0; hitRounds = 0; missRounds = 0;
+  isFirstRoundOfGame = true;
   if (reactSval) reactSval.textContent = '—';
+  updateAccPill();
   recentInsts.length = 0;
   dailyRoundLog = [];
 
-  // Mode-specific setup
+  // FIX: always reset trainingMode and hsMode when starting a fresh game
+  trainingMode = false;
+
+  // FIX: always hide hs-hud and training-hud on normal startGame
+  const hud  = document.getElementById('hs-hud');
+  const thud = document.getElementById('training-hud');
+  if (!hsMode && hud)  hud.classList.add('hidden');
+  if (!hsMode && thud) thud.classList.add('hidden');
+
   if (currentMode === 'sprint') {
-    lives = 99; // effectively unlimited — sprint ends by timer
+    lives = 99;
   } else if (currentMode === 'zen') {
     lives = 99;
   } else {
     lives = 3;
   }
 
-  // Daily seeded RNG
   seededR = currentMode === 'daily' ? makeSeededRand(getDailySeed()) : null;
 
-  // Tutorial on first ever game (classic only)
   if (isFirstGame && currentMode === 'classic') {
     tutorialStep = 0;
     localStorage.setItem('pb_played', '1');
@@ -2218,9 +2435,11 @@ function startGame() {
 
   gameActive = true;
   updateScoreUI(); updateLives(); updateStreak();
-  scrStart.classList.add('off'); scrGO.classList.add('off');
-  tbarEl.style.width = '100%'; tbarEl.className = 'timer-bar';
-  frRing.classList.remove('on'); chromaOff();
+  if (scrStart) scrStart.classList.add('off');
+  if (scrGO)    scrGO.classList.add('off');
+  if (tbarEl)   { tbarEl.style.width = '100%'; tbarEl.className = 'timer-bar'; }
+  if (frRing)   frRing.classList.remove('on');
+  chromaOff();
   if (tauntEl) tauntEl.textContent = '';
 
   stopSprintTimer();
@@ -2229,7 +2448,9 @@ function startGame() {
   startRound();
 }
 
-// ── COPY RESULT ──
+// ══════════════════════════════════════
+//  COPY RESULT
+// ══════════════════════════════════════
 function copyResult() {
   const avg = reactTimes.length
     ? Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length) + 'ms'
@@ -2258,128 +2479,82 @@ function copyResult() {
   });
 }
 
-// ── SHARE CARD IMAGE ──
+// ══════════════════════════════════════
+//  SHARE CARD IMAGE
+// ══════════════════════════════════════
 function drawShareCard() {
   const c = shareCanvas;
   if (!c) return null;
   const ctx = c.getContext('2d');
   const W = c.width, H = c.height;
-
-  // Background
-  ctx.fillStyle = '#030306';
-  ctx.fillRect(0, 0, W, H);
-
-  // Red glow border
-  ctx.shadowColor = '#ff1133';
-  ctx.shadowBlur  = 24;
-  ctx.strokeStyle = '#ff1133';
-  ctx.lineWidth   = 3;
+  ctx.fillStyle = '#030306'; ctx.fillRect(0, 0, W, H);
+  ctx.shadowColor = '#ff1133'; ctx.shadowBlur = 24;
+  ctx.strokeStyle = '#ff1133'; ctx.lineWidth = 3;
   ctx.strokeRect(8, 8, W - 16, H - 16);
-  ctx.shadowBlur  = 0;
-
-  // Title
-  ctx.font         = 'bold 48px "Bebas Neue", sans-serif';
-  ctx.fillStyle    = '#ff1133';
-  ctx.textAlign    = 'center';
-  ctx.shadowColor  = '#ff1133';
-  ctx.shadowBlur   = 18;
-  ctx.fillText('PANIC BUTTON', W / 2, 72);
-  ctx.shadowBlur   = 0;
-
-  // Mode badge
-  ctx.font      = '16px "Share Tech Mono", monospace';
+  ctx.shadowBlur = 0;
+  ctx.font = 'bold 48px "Bebas Neue", sans-serif';
+  ctx.fillStyle = '#ff1133'; ctx.textAlign = 'center';
+  ctx.shadowColor = '#ff1133'; ctx.shadowBlur = 18;
+  ctx.fillText('PANIC BUTTON', W / 2, 72); ctx.shadowBlur = 0;
+  ctx.font = '16px "Share Tech Mono", monospace';
   ctx.fillStyle = '#44446a';
   ctx.fillText(currentMode.toUpperCase() + ' MODE', W / 2, 100);
-
-  // Score
-  ctx.font      = 'bold 96px "Bebas Neue", sans-serif';
-  ctx.fillStyle = '#ffe500';
-  ctx.shadowColor = '#ffe500';
-  ctx.shadowBlur  = 20;
-  ctx.fillText(score, W / 2, 210);
-  ctx.shadowBlur  = 0;
-  ctx.font      = '14px "Share Tech Mono", monospace';
-  ctx.fillStyle = '#44446a';
+  ctx.font = 'bold 96px "Bebas Neue", sans-serif';
+  ctx.fillStyle = '#ffe500'; ctx.shadowColor = '#ffe500'; ctx.shadowBlur = 20;
+  ctx.fillText(score, W / 2, 210); ctx.shadowBlur = 0;
+  ctx.font = '14px "Share Tech Mono", monospace'; ctx.fillStyle = '#44446a';
   ctx.fillText('SCORE', W / 2, 232);
-
-  // Rank
-  ctx.font      = '28px "Bebas Neue", sans-serif';
-  ctx.fillStyle = '#00eeff';
-  ctx.shadowColor = '#00eeff';
-  ctx.shadowBlur  = 12;
-  ctx.fillText(getRank(score), W / 2, 272);
-  ctx.shadowBlur  = 0;
-
-  // Avg React
+  ctx.font = '28px "Bebas Neue", sans-serif'; ctx.fillStyle = '#00eeff';
+  ctx.shadowColor = '#00eeff'; ctx.shadowBlur = 12;
+  ctx.fillText(getRank(score), W / 2, 272); ctx.shadowBlur = 0;
   const avg = reactTimes.length
-    ? Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length) + 'ms'
-    : '—';
-  ctx.font      = '16px "Share Tech Mono", monospace';
-  ctx.fillStyle = '#cc00ff';
+    ? Math.round(reactTimes.reduce((a, b) => a + b, 0) / reactTimes.length) + 'ms' : '—';
+  ctx.font = '16px "Share Tech Mono", monospace'; ctx.fillStyle = '#cc00ff';
   ctx.fillText('AVG REACT: ' + avg, W / 2, 306);
-
-  // Reaction pills row (last 12)
   if (reactTimes.length > 0) {
     const pills = reactTimes.slice(-12);
     const pw = 36, ph = 18, gap = 6;
-    const total = pills.length * (pw + gap) - gap;
-    let px = (W - total) / 2;
-    const py = 326;
+    const totalW = pills.length * (pw + gap) - gap;
+    let px = (W - totalW) / 2; const py = 326;
     pills.forEach(t => {
       const col = t < 350 ? '#2dff00' : t < 650 ? '#ffe500' : '#ff1133';
-      ctx.fillStyle = col + '33';
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1;
+      ctx.fillStyle = col + '33'; ctx.strokeStyle = col; ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(px, py, pw, ph, 4);
+      if (ctx.roundRect) ctx.roundRect(px, py, pw, ph, 4);
+      else ctx.rect(px, py, pw, ph);
       ctx.fill(); ctx.stroke();
-      ctx.font = '9px "Share Tech Mono", monospace';
-      ctx.fillStyle = col;
+      ctx.font = '9px "Share Tech Mono", monospace'; ctx.fillStyle = col;
       ctx.fillText(t + 'ms', px + pw/2, py + 12);
       px += pw + gap;
     });
   }
-
-  // Daily grid
   if (currentMode === 'daily' && dailyRoundLog.length > 0) {
-    ctx.font      = '13px "Share Tech Mono", monospace';
-    ctx.fillStyle = '#44446a';
+    ctx.font = '13px "Share Tech Mono", monospace'; ctx.fillStyle = '#44446a';
     ctx.fillText(`DAY #${getDailyNum()}`, W / 2, 368);
     const emojis = dailyRoundLog.slice(0, 30).map(r => r==='hit'?'🟩':r==='miss'?'🟥':'🟨').join('');
-    ctx.font = '20px sans-serif';
-    ctx.fillStyle = '#fff';
+    ctx.font = '20px sans-serif'; ctx.fillStyle = '#fff';
     ctx.fillText(emojis, W / 2, 395);
   }
-
-  // Footer
-  ctx.font      = '12px "Share Tech Mono", monospace';
-  ctx.fillStyle = '#44446a';
+  ctx.font = '12px "Share Tech Mono", monospace'; ctx.fillStyle = '#44446a';
   ctx.fillText('panic-button.game', W / 2, H - 16);
-
   return c;
 }
 
 async function shareImage() {
   const canvas = drawShareCard();
   if (!canvas) return;
-
   const btn = document.getElementById('btn-share-img');
-
   canvas.toBlob(async blob => {
     const file = new File([blob], 'panic-button.png', { type: 'image/png' });
-    // Try Web Share API first (mobile)
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: 'PANIC BUTTON', text: `I scored ${score}!` });
         return;
-      } catch (e) { /* fallback to download */ }
+      } catch(e) {}
     }
-    // Fallback: download the image
     const url = URL.createObjectURL(blob);
     const a   = document.createElement('a');
-    a.href     = url;
-    a.download = 'panic-button.png';
-    a.click();
+    a.href = url; a.download = 'panic-button.png'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     if (btn) {
       btn.classList.add('copied');
@@ -2390,32 +2565,19 @@ async function shareImage() {
 }
 
 // ══════════════════════════════════════
+//  COLOR-BLIND MODE
 // ══════════════════════════════════════
 let cbMode = false;
 
 const SHAPE_MAP = {
-  click:       '▶',
-  wait:        '✋',
-  dblclick:    '▶▶',
-  tripleclick: '▶▶▶',
-  rightclick:  '◀',
-  move:        '〰',
-  hold_space:  '⏸',
-  hold_btn:    '⏸',
-  space:       '▣',
-  enter:       '↵',
-  key_a:       'Ⓐ',
-  key_escape:  '✕',
-  swipe_up:    '⬆',
-  swipe_down:  '⬇',
-  swipe_left:  '⬅',
-  swipe_right: '➡',
+  click:'▶', wait:'✋', dblclick:'▶▶', tripleclick:'▶▶▶', rightclick:'◀',
+  move:'〰', hold_space:'⏸', hold_btn:'⏸', space:'▣', enter:'↵',
+  key_a:'Ⓐ', key_escape:'✕', swipe_up:'⬆', swipe_down:'⬇', swipe_left:'⬅', swipe_right:'➡',
 };
 
 function toggleCB() {
   cbMode = !cbMode;
   document.body.classList.toggle('cb-mode', cbMode);
-  // Update all toggle buttons
   ['cb-toggle-start','cb-mini'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -2423,24 +2585,18 @@ function toggleCB() {
     if (lbl) lbl.textContent = 'Shape Mode: ' + (cbMode ? 'ON' : 'OFF');
     el.classList.toggle('on', cbMode);
   });
-  // Update shape indicator if mid-game
   updateShapeInd();
 }
 
 function updateShapeInd() {
   const ind = document.getElementById('shape-ind');
   if (!ind) return;
-  if (cbMode && curInst) {
-    ind.textContent = SHAPE_MAP[curInst.type] || '';
-  } else {
-    ind.textContent = '';
-  }
+  ind.textContent = (cbMode && curInst) ? (SHAPE_MAP[curInst.type] || '') : '';
 }
 
 // ══════════════════════════════════════
+//  PAUSE (tab visibility)
 // ══════════════════════════════════════
-
-// ── PAUSE ON TAB AWAY (Bug 4 fix) ──
 let isPaused = false;
 let pauseTimeRemaining = 0;
 
@@ -2452,16 +2608,17 @@ function pauseGame() {
   clearTimeout(waitTO); clearTimeout(switchTO);
   clearTimeout(holdTO); clearTimeout(tauntTO);
   stopHB();
-  document.getElementById('pause-ov').classList.add('show');
+  const pauseOv = document.getElementById('pause-ov');
+  if (pauseOv) pauseOv.classList.add('show');
 }
 
 function resumeGame() {
   if (!gameActive || !isPaused) return;
   isPaused = false;
-  document.getElementById('pause-ov').classList.remove('show');
+  const pauseOv = document.getElementById('pause-ov');
+  if (pauseOv) pauseOv.classList.remove('show');
   if (roundEnded) return;
 
-  // Re-anchor timerStart so remaining time is honoured
   timerStart = performance.now() - (timerDur - pauseTimeRemaining);
 
   if (curInst && curInst.type === 'wait') {
@@ -2471,27 +2628,32 @@ function resumeGame() {
   startHB(pauseTimeRemaining);
   startTaunt(pauseTimeRemaining);
 
-  // Restart RAF timer loop
   (function tick() {
-    const el  = performance.now() - timerStart;
-    const pct = Math.max(0, 1 - el / timerDur);
-    const rem = Math.max(0, (timerDur - el) / 1000);
-    tbarEl.style.width     = (pct * 100) + '%';
-    timerNumEl.textContent = rem.toFixed(1) + 's';
-    if (pct < .18) {
-      tbarEl.className = 'timer-bar danger'; timerNumEl.className = 'timer-num danger';
-      chromaOn(); instEl.classList.add('jitter');
+    const elapsed   = performance.now() - timerStart;
+    const linear    = Math.min(1, elapsed / timerDur);
+    const curved    = easeTimerCurve(linear);
+    const barPct    = Math.max(0, 1 - curved);
+    const linearPct = Math.max(0, 1 - linear);
+    const rem       = Math.max(0, (timerDur - elapsed) / 1000);
+    if (tbarEl)     tbarEl.style.width     = (barPct * 100) + '%';
+    if (timerNumEl) timerNumEl.textContent = rem.toFixed(1) + 's';
+    if (linearPct < .18) {
+      if (tbarEl)     tbarEl.className     = 'timer-bar danger';
+      if (timerNumEl) timerNumEl.className = 'timer-num danger';
+      chromaOn(); if (instEl) instEl.classList.add('jitter');
       if (curInst && curInst.type === 'click') pb.classList.add('danger-pulse');
-    } else if (pct < .45) {
-      tbarEl.className = 'timer-bar warn'; timerNumEl.className = 'timer-num warn';
-      chromaOff(); instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+    } else if (linearPct < .45) {
+      if (tbarEl)     tbarEl.className     = 'timer-bar warn';
+      if (timerNumEl) timerNumEl.className = 'timer-num warn';
+      chromaOff(); if (instEl) instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
     } else {
-      tbarEl.className = 'timer-bar'; timerNumEl.className = 'timer-num';
-      chromaOff(); instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+      if (tbarEl)     tbarEl.className     = 'timer-bar';
+      if (timerNumEl) timerNumEl.className = 'timer-num';
+      chromaOff(); if (instEl) instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
     }
-    if (el >= timerDur) {
-      tbarEl.style.width = '0%'; chromaOff();
-      instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
+    if (elapsed >= timerDur) {
+      if (tbarEl) tbarEl.style.width = '0%';
+      chromaOff(); if (instEl) instEl.classList.remove('jitter'); pb.classList.remove('danger-pulse');
       handleTimeout();
     } else { timerRAF = requestAnimationFrame(tick); }
   })();
@@ -2502,13 +2664,20 @@ document.addEventListener('visibilitychange', () => {
   else resumeGame();
 });
 
-// Start / Retry buttons
+// ══════════════════════════════════════
+//  BUTTON EVENTS
+// ══════════════════════════════════════
 btnStart.addEventListener('click',    startGame);
 btnRetry.addEventListener('click',    startGame);
 btnStart.addEventListener('touchend', e => { e.preventDefault(); startGame(); }, { passive: false });
 btnRetry.addEventListener('touchend', e => { e.preventDefault(); startGame(); }, { passive: false });
 
-// Panic button — mouse/keyboard
+const btnHomeEl = document.getElementById('btn-home');
+if (btnHomeEl) {
+  btnHomeEl.addEventListener('click',    goHome);
+  btnHomeEl.addEventListener('touchend', e => { e.preventDefault(); goHome(); }, { passive: false });
+}
+
 pb.addEventListener('click',       handleClick);
 pb.addEventListener('dblclick',    handleDblClick);
 pb.addEventListener('contextmenu', handleRightClick);
@@ -2516,9 +2685,348 @@ document.addEventListener('keydown',    handleKeyDown);
 document.addEventListener('keyup',      handleKeyUp);
 document.addEventListener('mousemove',  handleMouseMove);
 document.addEventListener('contextmenu', e => { if (gameActive) e.preventDefault(); });
-
-// Prevent scroll / zoom on mobile during gameplay
 document.addEventListener('touchmove', e => { if (gameActive) e.preventDefault(); }, { passive: false });
+
+// ══════════════════════════════════════
+//  MULTIPLAYER — WebSocket CLIENT
+// ══════════════════════════════════════
+let mpWS          = null;
+let mpMyId        = null;
+let mpRoomCode    = null;
+let mpIsSpectator = false;
+let mpCurrentInst = null;
+let mpRoundDur    = 2500;
+let mpRoundStart  = 0;
+let mpRoundRAF    = null;
+let mpPlayerScores = {};
+let mpPlayerNames  = {};
+
+function mpStatus(msg, ok = true) {
+  const el = document.getElementById('mp-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = 'editor-status ' + (ok ? 'ok' : 'err');
+  if (ok) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
+}
+
+function mpConnect(serverUrl, cb) {
+  // FIX v3: if already connected to a DIFFERENT server, close first
+  if (mpWS) {
+    if (mpWS.readyState === WebSocket.OPEN && mpWS._serverUrl === serverUrl) { cb(true); return; }
+    try { mpWS.onclose = null; mpWS.close(); } catch {}
+    mpWS = null; mpMyId = null;
+  }
+  try {
+    mpWS = new WebSocket(serverUrl);
+    mpWS._serverUrl = serverUrl; // tag for comparison above
+    mpWS.onerror = () => { mpStatus('Connection failed', false); cb(false); };
+    mpWS.onclose = () => { mpWS = null; mpMyId = null; };
+    mpWS.onmessage = (e) => { try { mpHandleMsg(JSON.parse(e.data)); } catch {} };
+    const waitConnected = (ev) => {
+      try {
+        const d = JSON.parse(ev.data);
+        if (d.type === 'connected') {
+          mpMyId = d.id;
+          mpWS.removeEventListener('message', waitConnected);
+          mpWS.onmessage = (e2) => { try { mpHandleMsg(JSON.parse(e2.data)); } catch {} };
+          cb(true);
+        }
+      } catch {}
+    };
+    mpWS.addEventListener('message', waitConnected);
+    setTimeout(() => { if (!mpMyId) { mpStatus('Timeout connecting', false); cb(false); } }, 5000);
+  } catch(e) { mpStatus('Invalid server URL', false); cb(false); }
+}
+
+function mpSend(obj) {
+  if (mpWS && mpWS.readyState === WebSocket.OPEN) mpWS.send(JSON.stringify(obj));
+}
+
+function openMultiplayer() {
+  document.getElementById('scr-multi')?.classList.remove('off');
+}
+
+function closeMultiplayer() {
+  if (mpWS) { mpWS.close(); mpWS = null; }
+  document.getElementById('scr-multi')?.classList.add('off');
+  mpRoomCode = null; mpMyId = null;
+  ['mp-lobby','mp-game-panel','mp-match-end'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+  mpStatus('', true);
+}
+
+function mpCreateRoom() {
+  const name   = (document.getElementById('mp-name')?.value.trim() || 'Player').slice(0, 16);
+  const server = document.getElementById('mp-server')?.value.trim() || 'ws://localhost:8080';
+  mpStatus('Connecting…');
+  mpConnect(server, (ok) => { if (ok) mpSend({ type: 'create_room', name }); });
+}
+
+function mpJoinRoom(spectate) {
+  // FIX: validate after uppercase conversion
+  const rawCode = document.getElementById('mp-code')?.value.trim() || '';
+  const code    = rawCode.toUpperCase();
+  const name    = (document.getElementById('mp-name')?.value.trim() || 'Player').slice(0, 16);
+  const server  = document.getElementById('mp-server')?.value.trim() || 'ws://localhost:8080';
+  if (code.length !== 4) { mpStatus('Enter a 4-letter room code', false); return; }
+  mpIsSpectator = spectate;
+  mpStatus('Joining…');
+  mpConnect(server, (ok) => { if (ok) mpSend({ type: 'join_room', code, name, spectate }); });
+}
+
+function mpShowLobby(state) {
+  document.getElementById('mp-lobby')?.classList.remove('hidden');
+  document.getElementById('mp-game-panel')?.classList.add('hidden');
+  document.getElementById('mp-match-end')?.classList.add('hidden');
+  const codeEl = document.getElementById('mp-rcd-code');
+  if (codeEl) codeEl.textContent = state.code;
+  mpRoomCode = state.code;
+  mpRenderPlayers(state);
+}
+
+function mpRenderPlayers(state) {
+  const list = document.getElementById('mp-players-list');
+  if (!list) return;
+  mpPlayerScores = {}; mpPlayerNames = {};
+  state.players.forEach(p => { mpPlayerScores[p.id] = p.score || 0; mpPlayerNames[p.id] = p.name; });
+  list.innerHTML = state.players.map(p => `
+    <div class="mp-player-row ${p.ready ? 'ready' : ''}">
+      <span class="mp-player-name">${p.name}${p.id === mpMyId ? ' (you)' : ''}</span>
+      <span class="mp-player-ready">${p.ready ? '✓ READY' : 'not ready'}</span>
+      <span class="mp-player-score">${p.score || 0}</span>
+    </div>
+  `).join('') + (state.spectators.length ? `<div style="color:var(--dim);font-size:10px;letter-spacing:1px;padding:4px">👁 ${state.spectators.length} watching</div>` : '');
+}
+
+function mpSetReady() {
+  mpSend({ type: 'set_ready' });
+  const btn = document.getElementById('mp-ready-btn');
+  if (btn) { btn.textContent = 'WAITING…'; btn.disabled = true; }
+}
+
+function mpCopyCode() {
+  if (!mpRoomCode) return;
+  navigator.clipboard.writeText(mpRoomCode).then(() => {
+    const btn = document.querySelector('.mp-copy-code');
+    if (btn) { const orig = btn.textContent; btn.textContent = 'COPIED!'; setTimeout(() => btn.textContent = orig, 1500); }
+  }).catch(() => {});
+}
+
+function mpSendChat() {
+  const inp = document.getElementById('mp-chat-in');
+  const text = inp?.value.trim();
+  if (!text) return;
+  mpSend({ type: 'chat', text });
+  inp.value = '';
+}
+
+function mpAddChat(from, text) {
+  const log = document.getElementById('mp-chat-log');
+  if (!log) return;
+  const msg = document.createElement('div');
+  msg.className = 'mp-chat-msg';
+  msg.innerHTML = `<span class="mp-chat-from">${from}:</span> ${text}`;
+  log.appendChild(msg);
+  log.scrollTop = log.scrollHeight;
+}
+
+function mpStartGame(state) {
+  document.getElementById('mp-lobby')?.classList.add('hidden');
+  document.getElementById('mp-game-panel')?.classList.remove('hidden');
+  document.getElementById('mp-match-end')?.classList.add('hidden');
+  mpRenderScoreHUD(state.players || []);
+  const instEl2 = document.getElementById('mp-hud-inst');
+  if (instEl2) { instEl2.textContent = 'READY…'; instEl2.className = 'mp-hud-inst cr'; }
+  document.getElementById('mp-round-result')?.classList.add('hidden');
+}
+
+function mpRenderScoreHUD(players) {
+  const hud = document.getElementById('mp-hud-scores');
+  if (!hud) return;
+  hud.innerHTML = players.map(p => `
+    <div class="mp-hud-player-score" id="mphud-${p.id}">
+      <span class="mp-hud-pname">${p.name}${p.id===mpMyId?' ★':''}</span>
+      <div class="mp-hud-pscore">${mpPlayerScores[p.id] || 0}</div>
+    </div>
+  `).join('');
+}
+
+function mpUpdateScores(scores) {
+  Object.entries(scores).forEach(([id, sc]) => {
+    mpPlayerScores[id] = sc;
+    const el = document.getElementById('mphud-' + id);
+    if (el) { const sv = el.querySelector('.mp-hud-pscore'); if (sv) sv.textContent = sc; }
+  });
+}
+
+function mpFlashWinner(winnerId) {
+  document.querySelectorAll('.mp-hud-player-score').forEach(el => el.classList.remove('winner-flash'));
+  if (winnerId) {
+    const el = document.getElementById('mphud-' + winnerId);
+    if (el) { el.classList.add('winner-flash'); setTimeout(() => el.classList.remove('winner-flash'), 800); }
+  }
+}
+
+function mpDoAction() {
+  if (!mpCurrentInst || mpIsSpectator) return;
+  // FIX v3: if instruction is a wait-type, clicking is wrong — don't send action
+  // (server handles wrong presses from player_action, so just send always;
+  //  but prevent spamming the button after round ends)
+  mpSend({ type: 'player_action' });
+  const btn = document.getElementById('mp-action-btn');
+  if (btn) { btn.disabled = true; setTimeout(() => { if (mpCurrentInst) btn.disabled = false; }, 400); }
+}
+
+function mpStartRoundTimer(dur) {
+  cancelAnimationFrame(mpRoundRAF);
+  mpRoundStart = performance.now();
+  const tbar = document.getElementById('mp-hud-tbar');
+  function tick() {
+    const el  = performance.now() - mpRoundStart;
+    const pct = Math.max(0, 1 - el / dur);
+    if (tbar) {
+      tbar.style.width = (pct * 100) + '%';
+      tbar.style.background = pct < .3 ? 'var(--red)' : pct < .55 ? 'var(--yellow)' : 'var(--green)';
+    }
+    if (el < dur) mpRoundRAF = requestAnimationFrame(tick);
+    else if (tbar) tbar.style.width = '0%';
+  }
+  mpRoundRAF = requestAnimationFrame(tick);
+}
+
+function mpShowRoundResult(txt, cls) {
+  const el = document.getElementById('mp-round-result');
+  if (!el) return;
+  el.textContent = txt;
+  el.className   = 'mp-round-result ' + cls;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 1200);
+}
+
+function mpPlayAgain() {
+  ['mp-game-panel','mp-match-end'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+  document.getElementById('mp-lobby')?.classList.remove('hidden');
+  const btn = document.getElementById('mp-ready-btn');
+  if (btn) { btn.textContent = 'READY UP'; btn.disabled = false; }
+  Object.keys(mpPlayerScores).forEach(id => mpPlayerScores[id] = 0);
+}
+
+function mpHandleMsg(msg) {
+  switch (msg.type) {
+    case 'room_created':
+      mpStatus('Room created!');
+      mpShowLobby(msg.state);
+      break;
+    case 'room_joined':
+      mpStatus('Joined room!');
+      mpIsSpectator = !!msg.spectating;
+      mpShowLobby(msg.state);
+      break;
+    case 'player_joined':
+      mpRenderPlayers(msg.state);
+      mpAddChat('System', `${msg.player.name} joined`);
+      break;
+    case 'player_left':
+      mpRenderPlayers(msg.state);
+      mpAddChat('System', 'Player left');
+      break;
+    case 'player_ready':
+      mpRenderPlayers(msg.state);
+      break;
+    case 'game_start':
+      mpStartGame(msg.state);
+      break;
+    case 'round_start': {
+      mpCurrentInst = msg.inst;
+      mpRoundDur    = msg.dur;
+      const mpInst = document.getElementById('mp-hud-inst');
+      const mpBtn  = document.getElementById('mp-action-btn');
+      if (mpInst) { mpInst.textContent = msg.inst.text; mpInst.className = 'mp-hud-inst ' + msg.inst.col; }
+      if (mpBtn)  {
+        mpBtn.disabled = false;
+        // FIX v3: visually hint wait rounds (blue = don't press)
+        mpBtn.classList.toggle('wait-mode', msg.inst.type === 'wait');
+        mpBtn.textContent = msg.inst.type === 'wait' ? "DON'T!" : 'PANIC!';
+      }
+      document.getElementById('mp-round-result')?.classList.add('hidden');
+      mpStartRoundTimer(msg.dur);
+      S.click();
+      break;
+    }
+    case 'round_end': {
+      cancelAnimationFrame(mpRoundRAF);
+      const mpBtn = document.getElementById('mp-action-btn');
+      if (mpBtn) mpBtn.disabled = true;
+      mpUpdateScores(msg.scores || {});
+      mpFlashWinner(msg.winner);
+      const iWon  = msg.winner === mpMyId;
+      const iSurv = msg.waitSurvivors?.includes(mpMyId);
+      let resultTxt, resultCls;
+      if (msg.winner) {
+        resultTxt = iWon ? '✓ FIRST!' : `${mpPlayerNames[msg.winner] || '?'} was first`;
+        resultCls = iWon ? 'win' : 'lose';
+      } else if (msg.waitSurvivors) {
+        resultTxt = iSurv ? '✓ SURVIVED' : '✗ PRESSED';
+        resultCls = iSurv ? 'win' : 'lose';
+      } else if (msg.timeout) {
+        resultTxt = 'TIME OUT'; resultCls = 'draw';
+      } else {
+        resultTxt = '—'; resultCls = 'draw';
+      }
+      mpShowRoundResult(resultTxt, resultCls);
+      if (iWon || iSurv) { S.ok(); vibOK(); } else { S.wrong(); vibWrong(); }
+      mpCurrentInst = null; // FIX v3: must be after result display, disables action btn guard
+      break;
+    }
+    case 'match_end': {
+      cancelAnimationFrame(mpRoundRAF);
+      document.getElementById('mp-game-panel')?.classList.add('hidden');
+      const endEl = document.getElementById('mp-match-end');
+      if (endEl) endEl.classList.remove('hidden');
+      const winner = msg.winner;
+      const mwEl = document.getElementById('mp-match-winner');
+      if (mwEl) mwEl.textContent = winner
+        ? (winner.id === mpMyId ? '🏆 YOU WIN!' : `${winner.name} WINS!`)
+        : '🤝 DRAW!';
+      const scoresEl = document.getElementById('mp-match-scores');
+      if (scoresEl) {
+        scoresEl.innerHTML = Object.entries(msg.scores || {})
+          .sort((a,b) => b[1]-a[1])
+          .map(([id, sc]) => `
+            <div class="mp-final-score ${winner && id===winner.id ? 'winner' : ''}">
+              <span class="mp-final-name">${mpPlayerNames[id] || id}${id===mpMyId?' (you)':''}</span>
+              <div class="mp-final-val">${sc}</div>
+            </div>
+          `).join('');
+      }
+      S.rank();
+      break;
+    }
+    case 'player_wrong':
+      if (msg.id === mpMyId) { S.wrong(); vibWrong(); }
+      break;
+    case 'chat':
+      mpAddChat(msg.from, msg.text);
+      break;
+    case 'error':
+      mpStatus(msg.msg, false);
+      break;
+  }
+}
+
+// Chat enter key
+document.getElementById('mp-chat-in')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); mpSendChat(); }
+});
+
+// FIX: auto-uppercase mp-code input via event listener (not inline)
+const mpCodeInput = document.getElementById('mp-code');
+if (mpCodeInput) {
+  mpCodeInput.addEventListener('input', (e) => {
+    const sel = e.target.selectionStart;
+    e.target.value = e.target.value.toUpperCase();
+    e.target.setSelectionRange(sel, sel);
+  });
+}
 
 // ══════════════════════════════════════
 //  INIT
@@ -2527,25 +3035,22 @@ applyTheme(activeTheme);
 renderThemeSwatches();
 fillTips();
 updateScoreUI();
+
 const hsNumEl = document.getElementById('hs-num');
 if (hsNumEl) hsNumEl.textContent = modeBest[currentMode];
-bestSval.textContent = modeBest[currentMode];
+if (bestSval) bestSval.textContent = modeBest[currentMode];
 updateLives();
 showStartTaunt();
 
-// Apply saved mute state
-if (isMuted) {
-  document.querySelectorAll('.mute-btn').forEach(el => {
-    el.textContent = '🔇'; el.title = 'Unmute'; el.classList.add('muted');
-  });
-}
+// FIX: init all mute buttons consistently
+syncMuteButtons();
 
-// ── PWA: Register Service Worker ──
+// PWA: Service Worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-// ── PWA: Install prompt ──
+// PWA: Install prompt
 let deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
